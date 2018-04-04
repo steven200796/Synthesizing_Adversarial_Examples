@@ -23,6 +23,8 @@ import argparse
 
 # 3.14159265
 import numpy as np
+import random
+import scipy.misc
 
 def inception(image, reuse):
     preprocessed = tf.multiply(tf.subtract(tf.expand_dims(image, 0), 0.5), 2.0)
@@ -101,16 +103,18 @@ def verify_transformations(img, transform_list=transformations):
     for transform in transform_list:
         transform_image = transform(image)
         transform_example = transform_image.eval(feed_dict={image: img})
-        classify(transform_example, correct_class=img_class, plot=True)
+        classify(transform_example, correct_class=img_class, target_class=target_class, plot=True)
 
-def eot_adversarial_synthesizer(img, epsilon=8.0/255.0, lr=2e-1, steps=300, target=924):
+def eot_adversarial_synthesizer(img, eps=8.0/255.0, lr=2e-1, steps=300, target=924):
     """
     synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
 
-    :param epsilon: allowed error 
+    :param eps: allowed error 
     :param lr: learning rate 
     :param target: target imagenet class, default is 924 'guacamole'
     """
+
+    """ Tensorflow Portion """
     x = tf.placeholder(tf.float32, (299, 299, 3))
 
     x_hat = image # our trainable adversarial input
@@ -121,59 +125,43 @@ def eot_adversarial_synthesizer(img, epsilon=8.0/255.0, lr=2e-1, steps=300, targ
 
     labels = tf.one_hot(y_hat, 1000)
     loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
-    optim_step = tf.train.GradientDescentOptimizer(
-        learning_rate).minimize(loss, var_list=[x_hat])
 
     epsilon = tf.placeholder(tf.float32, ())
-
     below = x - epsilon
     above = x + epsilon
     projected = tf.clip_by_value(tf.clip_by_value(x_hat, below, above), 0, 1)
     with tf.control_dependencies([projected]):
         project_step = tf.assign(x_hat, projected)
 
-    # initialization step
-    sess.run(assign_op, feed_dict={x: img})
-
-    # projected gradient descent
-    for i in range(demo_steps):
-        # gradient descent step
-        _, loss_value = sess.run(
-            [optim_step, loss],
-            feed_dict={learning_rate: demo_lr, y_hat: demo_target})
-        # project step
-        sess.run(project_step, feed_dict={x: img, epsilon: demo_epsilon})
-        if (i+1) % 10 == 0:
-            print('step %d, loss=%g' % (i+1, loss_value))
-
-    adv = x_hat.eval() # retrieve the adversarial example
-
-    classify(adv, correct_class=img_class, target_class=demo_target)
-
     num_samples = 10
     average_loss = 0
     for i in range(num_samples):
-        rotated_logits, _ = inception(rotated, reuse=True)
+        # TODO For now, just use one transformations.  Possibly need composition
+        transformed = random.choice(transformations)(image)
+        transformed_logits, _ = inception(transformed, reuse=True)
         average_loss += tf.nn.softmax_cross_entropy_with_logits(
-            logits=rotated_logits, labels=labels) / num_samples
-    optim_step = tf.train.GradientDescentOptimizer(
-            learning_rate).minimize(average_loss, var_list=[x_hat])
+            logits=transformed_logits, labels=labels) / num_samples
 
+    optim_step = tf.train.GradientDescentOptimizer(
+        learning_rate).minimize(average_loss, var_list=[x_hat])
+
+    """ Normal Python Gig """
     # initialization step
     sess.run(assign_op, feed_dict={x: img})
 
     # projected gradient descent
-    for i in range(demo_steps):
+    for i in range(steps):
         # gradient descent step
         _, loss_value = sess.run(
             [optim_step, average_loss],
-            feed_dict={learning_rate: demo_lr, y_hat: demo_target})
+            feed_dict={learning_rate: lr, y_hat: target})
         # project step
-        sess.run(project_step, feed_dict={x: img, epsilon: demo_epsilon})
+        sess.run(project_step, feed_dict={x: img, epsilon: eps})
         if (i+1) % 50 == 0:
             print('step %d, loss=%g' % (i+1, loss_value))
         
     adv_robust = x_hat.eval() # retrieve the adversarial example
+    return adv_robust
  
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate robust adversarial example which survives real world perturbations')
@@ -183,6 +171,12 @@ if __name__ == "__main__":
                         help='run each individual transformation to verify output')
     parser.add_argument('--image', type=str, 
                         help='input image for adversarial synthesis, one will be chosen at random if not provided')
+    parser.add_argument('--save', action='store_true',
+                        help='save adversarial result')
+    parser.add_argument('--correct_class', type=int, default=281,
+                        help='ground truth class of input image')
+    parser.add_argument('--target_class', type=int, default=924,
+                        help='targeted adversarial class of input image')
     args = parser.parse_args()
 
     # Load script location for loading dependencies
@@ -204,9 +198,6 @@ if __name__ == "__main__":
     else:
         img_path, _ = urlretrieve('http://www.anishathalye.com/media/2017/07/25/cat.jpg')
     
-    # HARD CODED EXPECTED IMAGE CLASS
-    img_class = 281
-
     # img = normal image, image = tensorflow image
     img = load_image(img_path) 
 
@@ -231,3 +222,9 @@ if __name__ == "__main__":
 
         if args.verify: 
             verify_transformations(img) 
+
+        #TODO add target_class support
+        adversarial_img = eot_adversarial_synthesizer(img)
+        classify(adversarial_img, correct_class=args.image_class, target_class=args.target_class, plot=True)
+        if args.save:
+            scipy.misc.imsave('adversary.jpeg', adversarial_img)
