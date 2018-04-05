@@ -26,6 +26,9 @@ import numpy as np
 import random
 import scipy.misc
 
+from datetime import datetime
+savedir = None
+
 def inception(image, reuse):
     preprocessed = tf.multiply(tf.subtract(tf.expand_dims(image, 0), 0.5), 2.0)
     arg_scope = nets.inception.inception_v3_arg_scope(weight_decay=0.0)
@@ -46,13 +49,13 @@ def load_image(img_path):
     img = (np.asarray(img) / 255.0).astype(np.float32)
     return img
 
-def classify(img, correct_class=None, target_class=None, plot=False):
+def classify(img, correct_class=None, target_class=None, plot=False, save=False):
     p = sess.run(probs, feed_dict={image: img})[0]
 
     topk = list(p.argsort()[-10:][::-1])
     topprobs = p[topk]
 
-    if plot: 
+    if plot or save: 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 8))
         fig.sca(ax1)
         ax1.imshow(img)
@@ -69,7 +72,16 @@ def classify(img, correct_class=None, target_class=None, plot=False):
                    [imagenet_labels[i][:15] for i in topk],
                    rotation='vertical')
         fig.subplots_adjust(bottom=0.2)
-        plt.show()
+        if save:
+            if target_class:
+                plt.savefig(os.path.join(savedir, "adversary_results.jpeg"))
+            else:
+                plt.savefig(os.path.join(savedir, "initial_results.jpeg"))
+        if plot:
+            plt.show()
+    
+    label_score_pairs = "\n".join(['{:^20s} : {:05.3f}{!s}'.format(imagenet_labels[i], p[i], " target" if i == target_class else " correct " if i == correct_class else "") for i in topk])
+    return label_score_pairs
 
 def rotate_transform(image, min_angle=-np.pi, max_angle=np.pi):
     rotated_img = tf.contrib.image.rotate(image, tf.random_uniform((), minval=min_angle, maxval=max_angle))
@@ -105,7 +117,7 @@ def verify_transformations(img, transform_list=transformations):
         transform_example = transform_image.eval(feed_dict={image: img})
         classify(transform_example, correct_class=img_class, target_class=target_class, plot=True)
 
-def eot_adversarial_synthesizer(img, eps=8.0/255.0, lr=2e-1, steps=300, target=924):
+def eot_adversarial_synthesizer(img, eps=8.0/255.0, lr=2e-1, steps=150, target=924):
     """
     synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
 
@@ -167,12 +179,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate robust adversarial example which survives real world perturbations')
     # parser.add_argument('image', metavar='N', type=int, nargs='+',
                         # help='an integer for the accumulator')
+    parser.add_argument('--save', action='store_true',
+                        help='save adversarial result')
+    parser.add_argument('--noplot', action='store_true',
+                        help='disable plotting so code execution does not block')
+    parser.add_argument('--classify', action='store_true',
+                        help='only classify the image with ImageNet')
     parser.add_argument('--verify', action='store_true',
                         help='run each individual transformation to verify output')
     parser.add_argument('--image', type=str, 
                         help='input image for adversarial synthesis, one will be chosen at random if not provided')
-    parser.add_argument('--save', action='store_true',
-                        help='save adversarial result')
     parser.add_argument('--correct_class', type=int, default=281,
                         help='ground truth class of input image')
     parser.add_argument('--target_class', type=int, default=924,
@@ -181,6 +197,14 @@ if __name__ == "__main__":
 
     # Load script location for loading dependencies
     __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
+
+    # directory to save results
+    if args.save:
+        savedir = os.path.join(
+        __location__,
+        "test_results",
+        datetime.now().strftime('%Y-%m-%d_%H:%M:%S'))
+        os.makedirs(savedir)
 
     # Load Imagenet classes
     imagenet_json = None
@@ -199,7 +223,7 @@ if __name__ == "__main__":
         img_path, _ = urlretrieve('http://www.anishathalye.com/media/2017/07/25/cat.jpg')
     
     # img = normal image, image = tensorflow image
-    img = load_image(img_path) 
+    img = load_image(img_path)
 
     tf.logging.set_verbosity(tf.logging.ERROR)
     with tf.Session() as sess:
@@ -223,8 +247,20 @@ if __name__ == "__main__":
         if args.verify: 
             verify_transformations(img) 
 
+        # Classify original image, store results
+        label_score_pairs = classify(img, correct_class=args.correct_class, plot=not args.noplot, save=args.save)
+        if args.save:
+            with open(os.path.join(savedir, 'initial_classification_scores.txt'), 'w') as f:
+                f.write(label_score_pairs)
+
+        if args.classify:
+            exit()
+
         #TODO add target_class support
         adversarial_img = eot_adversarial_synthesizer(img)
-        classify(adversarial_img, correct_class=args.image_class, target_class=args.target_class, plot=True)
+        label_score_pairs = classify(adversarial_img, correct_class=args.correct_class, target_class=args.target_class, plot=not args.noplot, save=args.save)
         if args.save:
-            scipy.misc.imsave('adversary.jpeg', adversarial_img)
+            scipy.misc.imsave(os.path.join(savedir, 'adversary.jpeg'), adversarial_img)
+            with open(os.path.join(savedir,'adversarial_classification_scores.txt'), 'w') as f:
+                f.write(label_score_pairs)
+
