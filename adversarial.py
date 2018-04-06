@@ -146,7 +146,7 @@ def sample_transformations(image, n=1):
     return transform_image
 
 #eps=8.0/255.0, lr=2e-1, steps=300, target=924
-def eot_adversarial_synthesizer(img, eps=35.0/255.0, lr=2e-1, steps=300, target=924):
+def eot_adversarial_synthesizer(img, eps=8/255.0, lr=2e-1, steps=800, target=924):
     """
     synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
 
@@ -176,8 +176,8 @@ def eot_adversarial_synthesizer(img, eps=35.0/255.0, lr=2e-1, steps=300, target=
 
     num_samples = 10
     average_loss = 0
-    for i in range(num_samples):
-        transformed = sample_transformations(image)
+    for i in range(5*num_samples):
+        transformed = sample_transformations(image,len(transformations))
         transformed_logits, _ = inception(transformed, reuse=True)
         average_loss += tf.nn.softmax_cross_entropy_with_logits(
             logits=transformed_logits, labels=labels) / num_samples
@@ -255,6 +255,8 @@ if __name__ == "__main__":
     img = load_image(img_path)
 
     tf.logging.set_verbosity(tf.logging.ERROR)
+
+
     with tf.Session() as sess:
         # Load Pretrained InceptionV3 Model
         data_dir = tempfile.mkdtemp()
@@ -287,6 +289,13 @@ if __name__ == "__main__":
 
         #TODO add target_class support
         adversarial_img = eot_adversarial_synthesizer(img)
+
+        #save progress
+        saver = tf.train.Saver()
+        save_path = saver.save(sess, os.path.join(__location__, "tmp/model.ckpt"))
+        print("adversarial generation checkpoint saved in path: %s" % save_path)
+ 
+
         label_score_pairs = classify(adversarial_img, correct_class=args.correct_class, target_class=args.target_class, plot=not args.noplot, save=args.save, tag='base')
         # Verify adversariality maintains under transformations
         verify_transformations(adversarial_img, args.correct_class, args.target_class, plot=not args.noplot, save=args.save)
