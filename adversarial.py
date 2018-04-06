@@ -49,7 +49,7 @@ def load_image(img_path):
     img = (np.asarray(img) / 255.0).astype(np.float32)
     return img
 
-def classify(img, correct_class=None, target_class=None, plot=False, save=False):
+def classify(img, correct_class=None, target_class=None, plot=False, save=False, tag=''):
     p = sess.run(probs, feed_dict={image: img})[0]
 
     topk = list(p.argsort()[-10:][::-1])
@@ -74,13 +74,18 @@ def classify(img, correct_class=None, target_class=None, plot=False, save=False)
         fig.subplots_adjust(bottom=0.2)
         if save:
             if target_class:
-                plt.savefig(os.path.join(savedir, "adversary_results.jpeg"))
+                plt.savefig(os.path.join(savedir, "adversary_results{!s}.jpeg".format('_'+tag if tag else tag)))
             else:
                 plt.savefig(os.path.join(savedir, "initial_results.jpeg"))
         if plot:
             plt.show()
     
     label_score_pairs = "\n".join(['{:^20s} : {:05.3f}{!s}'.format(imagenet_labels[i], p[i], " target" if i == target_class else " correct " if i == correct_class else "") for i in topk])
+    if target_class:
+        print('Adversarial Results {:s}'.format(tag))
+    else:
+        print('Initial Results {:s}'.format(tag))
+    print(label_score_pairs + '\n')
     return label_score_pairs
 
 def rotate_transform(image, min_angle=-np.pi, max_angle=np.pi):
@@ -96,7 +101,8 @@ def scale_transform(image, min_scale=0.9, max_scale=1.4):
     scaled_img = tf.image.resize_image_with_crop_or_pad(scaled_img, 299, 299)
     return scaled_img
 
-def brightness_transform(image, min_delta=-0.05, max_delta=0.05):
+# -0.05 and 0.05
+def brightness_transform(image, min_delta=-0.3, max_delta=0.3):
     brightened_img = tf.clip_by_value(tf.image.adjust_brightness(image, tf.random_uniform((), minval=min_delta, maxval=max_delta)), 0, 1)
     return brightened_img
 
@@ -111,13 +117,36 @@ def translation_transform(image, min_translate=-80, max_translate=80):
 
 transformations = [rotate_transform, scale_transform, brightness_transform, gaussian_noise_transform, translation_transform]
 
-def verify_transformations(img, transform_list=transformations):
+def verify_transformations(img, correct_class, target_class, plot=True, save=False, transform_list=transformations):
     for transform in transform_list:
         transform_image = transform(image)
         transform_example = transform_image.eval(feed_dict={image: img})
-        classify(transform_example, correct_class=img_class, target_class=target_class, plot=True)
+        classify(transform_example, correct_class=correct_class, target_class=target_class, plot=plot, save=save, tag=transform.__name__)
+    # scramble the transforms and apply them all
+    for i in range(5):
+        transform_example = np.copy(img)
+        for transform in sorted(transform_list, key=lambda x: random.random()):
+            transform_image = transform(transform_example)
+            transform_example = transform_image.eval(feed_dict={image: transform_example})
+        classify(transform_example, correct_class=correct_class, target_class=target_class, plot=plot, save=save, tag='Composition_{:d}'.format(i))
+        
+# Sampling function for training
+'''
+Uniformly random choice of single transformations does not extend to compositions
 
-def eot_adversarial_synthesizer(img, eps=8.0/255.0, lr=2e-1, steps=150, target=924):
+scrambled compositions of all transformations simply did not converge
+'''
+def sample_transformations(image, n=1):
+    transform_image = image
+    scrambled_transformations = sorted(transformations, key=lambda x: random.random())
+    if n != 0:
+        scrambled_transformations = scrambled_transformations[0:n]
+    for transform in scrambled_transformations:
+        transform_image = transform(transform_image)
+    return transform_image
+
+#eps=8.0/255.0, lr=2e-1, steps=300, target=924
+def eot_adversarial_synthesizer(img, eps=35.0/255.0, lr=2e-1, steps=300, target=924):
     """
     synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
 
@@ -148,8 +177,7 @@ def eot_adversarial_synthesizer(img, eps=8.0/255.0, lr=2e-1, steps=150, target=9
     num_samples = 10
     average_loss = 0
     for i in range(num_samples):
-        # TODO For now, just use one transformations.  Possibly need composition
-        transformed = random.choice(transformations)(image)
+        transformed = sample_transformations(image)
         transformed_logits, _ = inception(transformed, reuse=True)
         average_loss += tf.nn.softmax_cross_entropy_with_logits(
             logits=transformed_logits, labels=labels) / num_samples
@@ -161,11 +189,12 @@ def eot_adversarial_synthesizer(img, eps=8.0/255.0, lr=2e-1, steps=150, target=9
     # initialization step
     sess.run(assign_op, feed_dict={x: img})
 
-    # projected gradient descent
+    #for j in range(len(transformations)):
+        # projected gradient descent
     for i in range(steps):
         # gradient descent step
-        _, loss_value = sess.run(
-            [optim_step, average_loss],
+        _, loss_value, _ = sess.run(
+            [optim_step, average_loss, transformed],
             feed_dict={learning_rate: lr, y_hat: target})
         # project step
         sess.run(project_step, feed_dict={x: img, epsilon: eps})
@@ -184,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument('--noplot', action='store_true',
                         help='disable plotting so code execution does not block')
     parser.add_argument('--classify', action='store_true',
-                        help='only classify the image with ImageNet')
+                        help='only classify the image with ImageNet, terminate before generation of adversarial example')
     parser.add_argument('--verify', action='store_true',
                         help='run each individual transformation to verify output')
     parser.add_argument('--image', type=str, 
@@ -244,21 +273,23 @@ if __name__ == "__main__":
         saver = tf.train.Saver(restore_vars)
         saver.restore(sess, os.path.join(data_dir, 'inception_v3.ckpt'))
 
-        if args.verify: 
-            verify_transformations(img) 
-
         # Classify original image, store results
         label_score_pairs = classify(img, correct_class=args.correct_class, plot=not args.noplot, save=args.save)
         if args.save:
             with open(os.path.join(savedir, 'initial_classification_scores.txt'), 'w') as f:
                 f.write(label_score_pairs)
 
+        if args.verify: 
+            verify_transformations(img, args.correct_class, args.target_class, plot=not args.noplot, save=args.save)
+
         if args.classify:
             exit()
 
         #TODO add target_class support
         adversarial_img = eot_adversarial_synthesizer(img)
-        label_score_pairs = classify(adversarial_img, correct_class=args.correct_class, target_class=args.target_class, plot=not args.noplot, save=args.save)
+        label_score_pairs = classify(adversarial_img, correct_class=args.correct_class, target_class=args.target_class, plot=not args.noplot, save=args.save, tag='base')
+        # Verify adversariality maintains under transformations
+        verify_transformations(adversarial_img, args.correct_class, args.target_class, plot=not args.noplot, save=args.save)
         if args.save:
             scipy.misc.imsave(os.path.join(savedir, 'adversary.jpeg'), adversarial_img)
             with open(os.path.join(savedir,'adversarial_classification_scores.txt'), 'w') as f:
