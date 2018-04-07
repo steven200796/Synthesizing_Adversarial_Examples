@@ -1,3 +1,4 @@
+#!/bin/python3
 # Load InceptionV3 Model
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
@@ -80,13 +81,12 @@ def classify(img, correct_class=None, target_class=None, plot=False, save=False,
         if plot:
             plt.show()
     
-    label_score_pairs = "\n".join(['{:^20s} : {:05.3f}{!s}'.format(imagenet_labels[i], p[i], " target" if i == target_class else " correct " if i == correct_class else "") for i in topk])
-    if target_class:
-        print('Adversarial Results {:s}'.format(tag))
-    else:
-        print('Initial Results {:s}'.format(tag))
-    print(label_score_pairs + '\n')
-    return label_score_pairs
+    label_score_pairs = ['{:^20s} : {:05.3f}{!s}'.format(imagenet_labels[i], p[i], " target" if i == target_class else " correct " if i == correct_class else "") for i in topk]
+    caption = '{:s} {:s}'.format('Adversarial Results' if target_class else 'Initial Results', tag)
+    label_score_pairs.insert(0, caption)
+    print_string = '\n'.join(label_score_pairs)
+    print(print_string + '\n')
+    return print_string
 
 def rotate_transform(image, min_angle=-np.pi, max_angle=np.pi):
     rotated_img = tf.contrib.image.rotate(image, tf.random_uniform((), minval=min_angle, maxval=max_angle))
@@ -102,7 +102,7 @@ def scale_transform(image, min_scale=0.9, max_scale=1.4):
     return scaled_img
 
 # -0.05 and 0.05
-def brightness_transform(image, min_delta=-0.3, max_delta=0.3):
+def brightness_transform(image, min_delta=-0.05, max_delta=0.05):
     brightened_img = tf.clip_by_value(tf.image.adjust_brightness(image, tf.random_uniform((), minval=min_delta, maxval=max_delta)), 0, 1)
     return brightened_img
 
@@ -115,38 +115,52 @@ def translation_transform(image, min_translate=-80, max_translate=80):
    translated_img = tf.contrib.image.translate(image, tf.stack([tf.random_uniform((), minval=min_translate, maxval=max_translate), tf.random_uniform((), minval=min_translate, maxval=max_translate)]))
    return translated_img
 
-transformations = [rotate_transform, scale_transform, brightness_transform, gaussian_noise_transform, translation_transform]
+transformations = [scale_transform, rotate_transform, brightness_transform, gaussian_noise_transform, translation_transform]
 
 def verify_transformations(img, correct_class, target_class, plot=True, save=False, transform_list=transformations):
+    results = []
     for transform in transform_list:
         transform_image = transform(image)
         transform_example = transform_image.eval(feed_dict={image: img})
-        classify(transform_example, correct_class=correct_class, target_class=target_class, plot=plot, save=save, tag=transform.__name__)
+        results.append(classify(transform_example, correct_class=correct_class, target_class=target_class, plot=plot, save=save, tag=transform.__name__))
     # scramble the transforms and apply them all
     for i in range(5):
         transform_example = np.copy(img)
-        for transform in sorted(transform_list, key=lambda x: random.random()):
+        for transform in transformations:
+            #sorted(transform_list, key=lambda x: random.random()):
             transform_image = transform(transform_example)
             transform_example = transform_image.eval(feed_dict={image: transform_example})
-        classify(transform_example, correct_class=correct_class, target_class=target_class, plot=plot, save=save, tag='Composition_{:d}'.format(i))
+        results.append(classify(transform_example, correct_class=correct_class, target_class=target_class, plot=plot, save=save, tag='Composition_{:d}'.format(i)))
+    return "\n\n".join(results)
         
 # Sampling function for training
 '''
 Uniformly random choice of single transformations does not extend to compositions
 
 scrambled compositions of all transformations simply did not converge
+
+Pretty sure it's the scrambling which won't converge so will try with regular compositions
 '''
 def sample_transformations(image, n=1):
     transform_image = image
-    scrambled_transformations = sorted(transformations, key=lambda x: random.random())
+    #scrambled_transformations = sorted(transformations, key=lambda x: random.random())
+    scrambled_transformations = transformations
     if n != 0:
         scrambled_transformations = scrambled_transformations[0:n]
     for transform in scrambled_transformations:
         transform_image = transform(transform_image)
     return transform_image
 
+def guarantee_initialized_variables(session, list_of_variables = None):
+    if list_of_variables is None:
+        list_of_variables = tf.all_variables()
+    uninitialized_variables = list(tf.get_variable(name) for name in
+                                   session.run(tf.report_uninitialized_variables(list_of_variables)))
+    session.run(tf.initialize_variables(uninitialized_variables))
+    return unintialized_variables
+
 #eps=8.0/255.0, lr=2e-1, steps=300, target=924
-def eot_adversarial_synthesizer(img, eps=8/255.0, lr=2e-1, steps=800, target=924):
+def eot_adversarial_synthesizer(img, eps=8/255.0, lr=4e-1, steps=1, target=924):
     """
     synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
 
@@ -174,23 +188,34 @@ def eot_adversarial_synthesizer(img, eps=8/255.0, lr=2e-1, steps=800, target=924
     with tf.control_dependencies([projected]):
         project_step = tf.assign(x_hat, projected)
 
-    num_samples = 10
+    num_samples = 20
     average_loss = 0
-    for i in range(5*num_samples):
-        transformed = sample_transformations(image,len(transformations))
+    for i in range(num_samples):
+        transformed = sample_transformations(image, n=len(transformations))
         transformed_logits, _ = inception(transformed, reuse=True)
         average_loss += tf.nn.softmax_cross_entropy_with_logits(
             logits=transformed_logits, labels=labels) / num_samples
 
-    optim_step = tf.train.GradientDescentOptimizer(
-        learning_rate).minimize(average_loss, var_list=[x_hat])
+    #optim_step = tf.train.GradientDescentOptimizer(
+       # learning_rate).minimize(average_loss, var_list=[x_hat])
+
+    # hacky fix for initializing AdamOptimizer variables without clearning everything else
+    temp = set(tf.all_variables())
+
+    opt = tf.train.AdamOptimizer(learning_rate)
+    optim_step = opt.minimize(average_loss,var_list=[x_hat])
+
+    # must run for Optimizer with new unintialized variables 
+    # initializing AdamOptimizer variables without clearning everything else
+    sess.run(tf.initialize_variables(set(tf.all_variables()) - temp))
 
     """ Normal Python Gig """
     # initialization step
     sess.run(assign_op, feed_dict={x: img})
 
-    #for j in range(len(transformations)):
-        # projected gradient descent
+    # for j in range(len(transformations)):
+        # # projected gradient descent
+        # transformed = sample_transformations(image,j + 1)
     for i in range(steps):
         # gradient descent step
         _, loss_value, _ = sess.run(
@@ -200,7 +225,7 @@ def eot_adversarial_synthesizer(img, eps=8/255.0, lr=2e-1, steps=800, target=924
         sess.run(project_step, feed_dict={x: img, epsilon: eps})
         if (i+1) % 50 == 0:
             print('step %d, loss=%g' % (i+1, loss_value))
-        
+    
     adv_robust = x_hat.eval() # retrieve the adversarial example
     return adv_robust
  
@@ -256,7 +281,6 @@ if __name__ == "__main__":
 
     tf.logging.set_verbosity(tf.logging.ERROR)
 
-
     with tf.Session() as sess:
         # Load Pretrained InceptionV3 Model
         data_dir = tempfile.mkdtemp()
@@ -296,11 +320,13 @@ if __name__ == "__main__":
         print("adversarial generation checkpoint saved in path: %s" % save_path)
  
 
-        label_score_pairs = classify(adversarial_img, correct_class=args.correct_class, target_class=args.target_class, plot=not args.noplot, save=args.save, tag='base')
+        base_results = classify(adversarial_img, correct_class=args.correct_class, target_class=args.target_class, plot=not args.noplot, save=args.save, tag='base')
         # Verify adversariality maintains under transformations
-        verify_transformations(adversarial_img, args.correct_class, args.target_class, plot=not args.noplot, save=args.save)
+        test_results = verify_transformations(adversarial_img, args.correct_class, args.target_class, plot=not args.noplot, save=args.save)
         if args.save:
             scipy.misc.imsave(os.path.join(savedir, 'adversary.jpeg'), adversarial_img)
             with open(os.path.join(savedir,'adversarial_classification_scores.txt'), 'w') as f:
-                f.write(label_score_pairs)
+                f.write(base_results)
+                f.write('\n\n')
+                f.write(test_results)
 
