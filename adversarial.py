@@ -1,4 +1,4 @@
-#!/bin/python3
+#!/usr/bin/env python3
 # Load InceptionV3 Model
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
@@ -14,6 +14,8 @@ import os
 import json
 
 # Load Plotting Module
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # Image Loading
@@ -111,9 +113,15 @@ def gaussian_noise_transform(image, min_noise=0, max_noise=0.1):
     noisy_img = tf.clip_by_value(noise + image, 0, 1)
     return noisy_img
 
-def translation_transform(image, min_translate=-80, max_translate=80):
-   translated_img = tf.contrib.image.translate(image, tf.stack([tf.random_uniform((), minval=min_translate, maxval=max_translate), tf.random_uniform((), minval=min_translate, maxval=max_translate)]))
-   return translated_img
+def translation_transform(image, min_translate=-80, max_translate=80, interpolation='NEAREST'):
+    tx = tf.random_uniform((), minval=min_translate, maxval=max_translate) 
+    ty = tf.random_uniform((), minval=min_translate, maxval=max_translate)
+    transforms = [1, 0, -tx, 0, 1, -ty, 0, 0]
+    return tf.contrib.image.transform(image, transforms, interpolation)
+
+#def translation_transform(image, min_translate=-80, max_translate=80):
+#   translated_img = tf.contrib.image.translate(image, tf.stack([tf.random_uniform((), minval=min_translate, maxval=max_translate), tf.random_uniform((), minval=min_translate, maxval=max_translate)]))
+#   return translated_img
 
 transformations = [scale_transform, rotate_transform, brightness_transform, gaussian_noise_transform, translation_transform]
 
@@ -218,7 +226,7 @@ def sample_transformations(image, n=1):
             # return adv_robust
 
 #eps=8.0/255.0, lr=2e-1, steps=300, target=924
-def eot_adversarial_synthesizer(img, eps=8/255.0, lr=1e-4, steps=300, target=924, restore=False, restore_vars=[]):
+def eot_adversarial_synthesizer(img, eps=8/255.0, lr=3e-4, steps=10000, target=924, restore=False, restore_vars=[]):
     """
     synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
 
@@ -237,7 +245,7 @@ def eot_adversarial_synthesizer(img, eps=8/255.0, lr=1e-4, steps=300, target=924
     y_hat = tf.placeholder(tf.int32, ())
 
     labels = tf.one_hot(y_hat, 1000)
-    loss = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=[labels])
+    loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
 
     epsilon = tf.placeholder(tf.float32, ())
     below = x - epsilon
@@ -246,10 +254,11 @@ def eot_adversarial_synthesizer(img, eps=8/255.0, lr=1e-4, steps=300, target=924
     with tf.control_dependencies([projected]):
         project_step = tf.assign(x_hat, projected)
 
-    num_samples = 10
+    num_samples = 10 
     average_loss = 0
-    for transform in transformations:
-        for i in range(num_samples):
+
+    for i in range(num_samples):
+        for transform in transformations:
             transformed = transform(image)
         transformed_logits, _ = inception(transformed, reuse=True)
         average_loss += tf.nn.softmax_cross_entropy_with_logits(
