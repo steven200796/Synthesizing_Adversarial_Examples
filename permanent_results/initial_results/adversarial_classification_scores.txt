@@ -1,0 +1,131 @@
+Adversarial Results base
+     guacamole       : 1.000 target
+  bulletproof vest   : 0.000
+       mortar        : 0.000
+      broccoli       : 0.000
+      burrito        : 0.000
+   cucumber, cuke    : 0.000
+can opener, tin opener : 0.000
+       apron         : 0.000
+paddle, boat paddle  : 0.000
+    bell pepper      : 0.000
+
+Adversarial Results scale_transform
+     guacamole       : 1.000 target
+  bulletproof vest   : 0.000
+      burrito        : 0.000
+      broccoli       : 0.000
+       mortar        : 0.000
+  tabby, tabby cat   : 0.000 correct 
+       apron         : 0.000
+     car mirror      : 0.000
+     tiger cat       : 0.000
+paddle, boat paddle  : 0.000
+
+Adversarial Results rotate_transform
+     guacamole       : 1.000 target
+  bulletproof vest   : 0.000
+      burrito        : 0.000
+  tabby, tabby cat   : 0.000 correct 
+       mortar        : 0.000
+      broccoli       : 0.000
+       apron         : 0.000
+     tiger cat       : 0.000
+paddle, boat paddle  : 0.000
+   cucumber, cuke    : 0.000
+
+Adversarial Results brightness_transform
+     guacamole       : 1.000 target
+  bulletproof vest   : 0.000
+       mortar        : 0.000
+      broccoli       : 0.000
+   cucumber, cuke    : 0.000
+      burrito        : 0.000
+can opener, tin opener : 0.000
+       apron         : 0.000
+paddle, boat paddle  : 0.000
+    bell pepper      : 0.000
+
+Adversarial Results gaussian_noise_transform
+     guacamole       : 1.000 target
+      broccoli       : 0.000
+  tabby, tabby cat   : 0.000 correct 
+       mortar        : 0.000
+       ladle         : 0.000
+      burrito        : 0.000
+   custard apple     : 0.000
+     tiger cat       : 0.000
+    wooden spoon     : 0.000
+    cheeseburger     : 0.000
+
+Adversarial Results translation_transform
+     guacamole       : 1.000 target
+  bulletproof vest   : 0.000
+  tabby, tabby cat   : 0.000 correct 
+      burrito        : 0.000
+       mortar        : 0.000
+      broccoli       : 0.000
+     tiger cat       : 0.000
+    Granny Smith     : 0.000
+     car mirror      : 0.000
+can opener, tin opener : 0.000
+
+Adversarial Results Composition_0
+  tabby, tabby cat   : 0.561 correct 
+     tiger cat       : 0.113
+    Egyptian cat     : 0.078
+    Persian cat      : 0.039
+  lynx, catamount    : 0.028
+television, television system : 0.009
+great grey owl, great gray owl, Strix nebulosa : 0.009
+ screen, CRT screen  : 0.005
+   window screen     : 0.003
+snow leopard, ounce, Panthera uncia : 0.002
+
+Adversarial Results Composition_1
+  tabby, tabby cat   : 0.359 correct 
+television, television system : 0.107
+home theater, home theatre : 0.094
+ screen, CRT screen  : 0.060
+     tiger cat       : 0.049
+      monitor        : 0.028
+    Egyptian cat     : 0.017
+entertainment center : 0.007
+   window screen     : 0.007
+bow tie, bow-tie, bowtie : 0.006
+
+Adversarial Results Composition_2
+  tabby, tabby cat   : 0.874 correct 
+     tiger cat       : 0.033
+  lynx, catamount    : 0.029
+    Egyptian cat     : 0.010
+television, television system : 0.002
+    Persian cat      : 0.002
+   window screen     : 0.001
+remote control, remote : 0.001
+ screen, CRT screen  : 0.001
+home theater, home theatre : 0.001
+
+Adversarial Results Composition_3
+  tabby, tabby cat   : 0.751 correct 
+     tiger cat       : 0.148
+    Egyptian cat     : 0.035
+television, television system : 0.003
+ screen, CRT screen  : 0.001
+  lynx, catamount    : 0.001
+   window screen     : 0.001
+doormat, welcome mat : 0.001
+      radiator       : 0.001
+       carton        : 0.001
+
+Adversarial Results Composition_4
+  tabby, tabby cat   : 0.501 correct 
+  lynx, catamount    : 0.195
+     tiger cat       : 0.120
+    Egyptian cat     : 0.064
+   jigsaw puzzle     : 0.008
+great grey owl, great gray owl, Strix nebulosa : 0.004
+    Persian cat      : 0.003
+snow leopard, ounce, Panthera uncia : 0.003
+television, television system : 0.003
+ screen, CRT screen  : 0.003

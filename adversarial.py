@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 
 # Image Loading
 import PIL 
+import skimage.color as color
 
 # Optional Flags
 import argparse
@@ -50,9 +51,11 @@ def load_image(img_path):
     new_h = 299 if wide else int(img.height * 299 / img.width)
     img = img.resize((new_w, new_h)).crop((0, 0, 299, 299))
     img = (np.asarray(img) / 255.0).astype(np.float32)
+    img = color.rgb2lab(img)
     return img
 
-def classify(img, correct_class=None, target_class=None, plot=False, save=False, tag=''):
+def classify(lab_img, correct_class=None, target_class=None, plot=False, save=False, tag=''):
+    img = color.lab2rgb(lab_img)
     p = sess.run(probs, feed_dict={image: img})[0]
 
     topk = list(p.argsort()[-10:][::-1])
@@ -260,8 +263,8 @@ def eot_adversarial_synthesizer(img, eps=8/255.0, lr=3e-4, steps=10000, target=9
     for i in range(num_samples):
         for transform in transformations:
             transformed = transform(image)
-        transformed_logits, _ = inception(transformed, reuse=True)
-        average_loss += tf.nn.softmax_cross_entropy_with_logits(
+            transformed_logits, _ = inception(transformed, reuse=True)
+            average_loss += tf.nn.softmax_cross_entropy_with_logits(
                 logits=transformed_logits, labels=labels) / (num_samples * len(transformations))
 
     temp = set(tf.all_variables())
@@ -400,7 +403,7 @@ if __name__ == "__main__":
         # Verify adversariality maintains under transformations, this clobbers the x_hat tensor so make sure to save before
         test_results = verify_transformations(adversarial_img, args.correct_class, args.target_class, plot=not args.noplot, save=args.save)
         if args.save:
-            scipy.misc.imsave(os.path.join(savedir, 'adversary.jpeg'), adversarial_img)
+            scipy.misc.imsave(os.path.join(savedir, 'adversary.jpeg'), color.lab2rgb(adversarial_img))
             with open(os.path.join(savedir,'adversarial_classification_scores.txt'), 'w') as f:
                 f.write(base_results)
                 f.write('\n\n')
