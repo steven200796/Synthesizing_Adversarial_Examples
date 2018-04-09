@@ -33,6 +33,126 @@ import scipy.misc
 from datetime import datetime
 savedir = None
 
+def rgb2labnorm(img):
+    img = color.rgb2lab(img)
+    #normalize
+    img = (img + [0, 128, 128]) / [100, 255, 255]
+    return img
+
+def labnorm2rgb(img):
+    #denormalize
+    img = (img *  [100, 255, 255]) - [0, 128, 128]
+    img = color.lab2rgb(img)
+    return img
+
+def preprocess_lab(lab):
+    with tf.name_scope("preprocess_lab"):
+        L_chan, a_chan, b_chan = tf.unstack(lab, axis=2)
+        # L_chan: black and white with input range [0, 100]
+        # a_chan/b_chan: color channels with input range ~[-110, 110], not exact
+        # [0, 100] => [-1, 1],  ~[-110, 110] => [-1, 1]
+        return [L_chan / 50 - 1, a_chan / 110, b_chan / 110]
+
+def deprocess_lab(L_chan, a_chan, b_chan):
+    with tf.name_scope("deprocess_lab"):
+        # this is axis=3 instead of axis=2 because we process individual images but deprocess batches
+        return tf.stack([(L_chan + 1) / 2 * 100, a_chan * 110, b_chan * 110], axis=3)
+
+def check_image(image):
+    assertion = tf.assert_equal(tf.shape(image)[-1], 3, message="image must have 3 color channels")
+    with tf.control_dependencies([assertion]):
+        image = tf.identity(image)
+
+    if image.get_shape().ndims not in (3, 4):
+        raise ValueError("image must be either 3 or 4 dimensions")
+
+    # make the last dimension 3 so that you can unstack the colors
+    shape = list(image.get_shape())
+    shape[-1] = 3
+    image.set_shape(shape)
+    return image
+
+def rgb_to_lab(srgb):
+    with tf.name_scope("rgb_to_lab"):
+        srgb = check_image(srgb)
+        srgb_pixels = tf.reshape(srgb, [-1, 3])
+
+        with tf.name_scope("srgb_to_xyz"):
+            linear_mask = tf.cast(srgb_pixels <= 0.04045, dtype=tf.float32)
+            exponential_mask = tf.cast(srgb_pixels > 0.04045, dtype=tf.float32)
+            rgb_pixels = (srgb_pixels / 12.92 * linear_mask) + (((srgb_pixels + 0.055) / 1.055) ** 2.4) * exponential_mask
+            rgb_to_xyz = tf.constant([
+                #    X        Y          Z
+                [0.412453, 0.212671, 0.019334], # R
+                [0.357580, 0.715160, 0.119193], # G
+                [0.180423, 0.072169, 0.950227], # B
+            ])
+            xyz_pixels = tf.matmul(rgb_pixels, rgb_to_xyz)
+
+        # https://en.wikipedia.org/wiki/Lab_color_space#CIELAB-CIEXYZ_conversions
+        with tf.name_scope("xyz_to_cielab"):
+            # convert to fx = f(X/Xn), fy = f(Y/Yn), fz = f(Z/Zn)
+
+            # normalize for D65 white point
+            xyz_normalized_pixels = tf.multiply(xyz_pixels, [1/0.950456, 1.0, 1/1.088754])
+
+            epsilon = 6/29
+            linear_mask = tf.cast(xyz_normalized_pixels <= (epsilon**3), dtype=tf.float32)
+            exponential_mask = tf.cast(xyz_normalized_pixels > (epsilon**3), dtype=tf.float32)
+            fxfyfz_pixels = (xyz_normalized_pixels / (3 * epsilon**2) + 4/29) * linear_mask + (xyz_normalized_pixels ** (1/3)) * exponential_mask
+
+            # convert to lab
+            fxfyfz_to_lab = tf.constant([
+                #  l       a       b
+                [  0.0,  500.0,    0.0], # fx
+                [116.0, -500.0,  200.0], # fy
+                [  0.0,    0.0, -200.0], # fz
+            ])
+            lab_pixels = tf.matmul(fxfyfz_pixels, fxfyfz_to_lab) + tf.constant([-16.0, 0.0, 0.0])
+
+        return tf.reshape(lab_pixels, tf.shape(srgb))
+
+def lab_to_rgb(lab):
+    with tf.name_scope("lab_to_rgb"):
+        lab = check_image(lab)
+        lab_pixels = tf.reshape(lab, [-1, 3])
+
+        # https://en.wikipedia.org/wiki/Lab_color_space#CIELAB-CIEXYZ_conversions
+        with tf.name_scope("cielab_to_xyz"):
+            # convert to fxfyfz
+            lab_to_fxfyfz = tf.constant([
+                #   fx      fy        fz
+                [1/116.0, 1/116.0,  1/116.0], # l
+                [1/500.0,     0.0,      0.0], # a
+                [    0.0,     0.0, -1/200.0], # b
+            ])
+            fxfyfz_pixels = tf.matmul(lab_pixels + tf.constant([16.0, 0.0, 0.0]), lab_to_fxfyfz)
+
+            # convert to xyz
+            epsilon = 6/29
+            linear_mask = tf.cast(fxfyfz_pixels <= epsilon, dtype=tf.float32)
+            exponential_mask = tf.cast(fxfyfz_pixels > epsilon, dtype=tf.float32)
+            xyz_pixels = (3 * epsilon**2 * (fxfyfz_pixels - 4/29)) * linear_mask + (fxfyfz_pixels ** 3) * exponential_mask
+
+            # denormalize for D65 white point
+            xyz_pixels = tf.multiply(xyz_pixels, [0.950456, 1.0, 1.088754])
+
+        with tf.name_scope("xyz_to_srgb"):
+            xyz_to_rgb = tf.constant([
+                #     r           g          b
+                [ 3.2404542, -0.9692660,  0.0556434], # x
+                [-1.5371385,  1.8760108, -0.2040259], # y
+                [-0.4985314,  0.0415560,  1.0572252], # z
+            ])
+            rgb_pixels = tf.matmul(xyz_pixels, xyz_to_rgb)
+            # avoid a slightly negative number messing up the conversion
+            rgb_pixels = tf.clip_by_value(rgb_pixels, 0.0, 1.0)
+            linear_mask = tf.cast(rgb_pixels <= 0.0031308, dtype=tf.float32)
+            exponential_mask = tf.cast(rgb_pixels > 0.0031308, dtype=tf.float32)
+            srgb_pixels = (rgb_pixels * 12.92 * linear_mask) + ((rgb_pixels ** (1/2.4) * 1.055) - 0.055) * exponential_mask
+
+    return tf.reshape(srgb_pixels, tf.shape(lab))
+
 def inception(image, reuse):
     preprocessed = tf.multiply(tf.subtract(tf.expand_dims(image, 0), 0.5), 2.0)
     arg_scope = nets.inception.inception_v3_arg_scope(weight_decay=0.0)
@@ -43,19 +163,20 @@ def inception(image, reuse):
         probs = tf.nn.softmax(logits) # probabilities
     return logits, probs
 
-def load_image(img_path):
+def load_image(img_path, lab=False):
     img = PIL.Image.open(img_path)
     big_dim = max(img.width, img.height)
     wide = img.width > img.height
     new_w = 299 if not wide else int(img.width * 299 / img.height)
     new_h = 299 if wide else int(img.height * 299 / img.width)
-    img = img.resize((new_w, new_h)).crop((0, 0, 299, 299))
-    img = (np.asarray(img) / 255.0).astype(np.float32)
-    img = color.rgb2lab(img)
-    return img
+    img = img.resize((new_w, new_h)).crop((0, 0, 299, 299)) 
+    if lab:
+        return rgb2labnorm(img)
+    else:
+        img = (np.asarray(img) / 255.0).astype(np.float32)
+        return img
 
-def classify(lab_img, correct_class=None, target_class=None, plot=False, save=False, tag=''):
-    img = color.lab2rgb(lab_img)
+def classify(img, correct_class=None, target_class=None, plot=False, save=False, tag=''):
     p = sess.run(probs, feed_dict={image: img})[0]
 
     topk = list(p.argsort()[-10:][::-1])
@@ -163,73 +284,7 @@ def sample_transformations(image, n=1):
     return transform_image
 
 # eps=8.0/255.0, lr=2e-1, steps=300, target=924
-# def eot_adversarial_synthesizer(img, eps=8/255.0, lr=1e-4, steps=300, target=924, restore=False, reuse=False):
-    # """
-    # synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
-
-    # :param eps: allowed error 
-    # :param lr: learning rate 
-    # :param target: target imagenet class, default is 924 'guacamole'
-    # """
-
-    # """ Tensorflow Portion """
-    # with tf.variable_scope("adversarial", reuse):
-        # x = tf.constant(0.0, shape=[299,299,3])
-        # trainable adversarial input
-        # hacky way of linking adversarial model to inceptionv3 model
-        # x_hat = image
-
-        # learning_rate = tf.placeholder(tf.float32, ())
-        # y_hat = tf.placeholder(tf.int32, ())
-
-        # labels = tf.one_hot(y_hat, 1000)
-        # loss = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=[labels])
-
-        # epsilon = tf.placeholder(tf.float32, ())
-        # below = x - epsilon
-        # above = x + epsilon
-        # projected = tf.clip_by_value(tf.clip_by_value(x_hat, below, above), 0, 1)
-        # with tf.control_dependencies([projected]):
-            # project_step = tf.assign(x_hat, projected)
-
-        # num_samples = 10
-        # average_loss = 0
-        # for transform in transformations:
-            # for i in range(num_samples):
-                # transformed = transform(image)
-            # transformed_logits, _ = inception(transformed, reuse=True)
-            # average_loss += tf.nn.softmax_cross_entropy_with_logits(
-                    # logits=transformed_logits, labels=labels) / num_samples * len(transformations)
-
-        # for i in range(num_samples):
-            # transformed = sample_transformations(image, n=len(transformations))
-            # transformed_logits, _ = inception(transformed, reuse=True)
-            # average_loss += tf.nn.softmax_cross_entropy_with_logits(
-                # logits=transformed_logits, labels=labels) / num_samples
-
-        # optim_step = tf.train.GradientDescentOptimizer(
-           # learning_rate).minimize(average_loss, var_list=[x_hat])
-        # optim_step = tf.train.AdamOptimizer(learning_rate).minimize(average_loss,var_list=[x_hat])
-
-        # if reuse:
-            # sess.run(x, feed_dict={x: img})
-            # """ Normal Python Gig """
-            # projected gradient descent
-            # for i in range(steps):
-                # gradient descent step
-                # _, loss_value, = sess.run(
-                    # [optim_step, average_loss],
-                    # feed_dict={learning_rate: lr, y_hat: target})
-                # project step
-                # sess.run(project_step, feed_dict={epsilon: eps})
-                # if (i+1) % 50 == 0:
-                    # print('step %d, loss=%g' % (i+1, loss_value))
-
-            # adv_robust = x_hat.eval() retrieve the adversarial example
-            # return adv_robust
-
-#eps=8.0/255.0, lr=2e-1, steps=300, target=924
-def eot_adversarial_synthesizer(img, eps=8/255.0, lr=3e-4, steps=10000, target=924, restore=False, restore_vars=[]):
+def eot_adversarial_synthesizer(img, eps=8/255.0, lr=3e-4, steps=1, target=924, restore=False, saver=None):
     """
     synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
 
@@ -290,6 +345,87 @@ def eot_adversarial_synthesizer(img, eps=8/255.0, lr=3e-4, steps=10000, target=9
 
     adv_robust = x_hat.eval() # retrieve the adversarial example
     return adv_robust
+
+def eot_adversarial_synthesizer_lab_lgr(img, eps=8/255.0, lr=3e-4, steps=1000, target=924, lagrange_c=1, restore=False, saver=None):
+    """
+    synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
+
+    :param eps: allowed error 
+    :param lr: learning rate 
+    :param target: target imagenet class, default is 924 'guacamole'
+    :param lagrange_c: lagrangian relaxation constant
+    """
+
+    """ Tensorflow Portion """
+    x = tf.placeholder(tf.float32, [299,299,3])
+    c = tf.placeholder(tf.float32, ())
+    # Must denorm x to transform to LAB
+    x_lab = tf.Variable(tf.stack(preprocess_lab(rgb_to_lab(255.0 * x))))
+    #trainable adversarial input
+    # hacky way of linking adversarial model to inceptionv3 model
+    x_hat = image
+
+    learning_rate = tf.placeholder(tf.float32, ())
+    y_hat = tf.placeholder(tf.int32, ())
+
+    labels = tf.one_hot(y_hat, 1000)
+    loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
+
+  #  epsilon = tf.placeholder(tf.float32, ())
+    projected = tf.clip_by_value(x_hat, 0, 1)
+    with tf.control_dependencies([projected]):
+        project_step = tf.assign(x_hat, projected)
+
+    num_samples = 10 
+    average_loss = 0
+
+    for i in range(num_samples):
+        for transform in transformations:
+            transformed = transform(image)
+            _, transformed_prob = inception(transformed, reuse=True)
+            prob = transformed_prob[0, target]
+            norm = tf.norm(
+                    tf.subtract(
+                        x_lab,
+                        preprocess_lab(rgb_to_lab(255.0 * x_hat))
+                        ))
+            average_loss += tf.add(
+                    tf.negative(tf.log(prob)), 
+                    tf.scalar_mul(
+                        c, 
+                        norm
+                        )
+                ) / (num_samples * len(transformations))
+            
+
+    temp = set(tf.all_variables())
+    optim_step = tf.train.AdamOptimizer(learning_rate).minimize(average_loss,var_list=[x_hat]) 
+
+    # Hacky Adam Variables Initializer
+    sess.run(tf.initialize_variables(set(tf.all_variables()) - temp))
+
+    if restore:
+        # restore adversarial model
+        saver.restore(sess, os.path.join(__location__, "tmp/model.ckpt"))
+
+    #initialize variables
+    sess.run(x_lab.initializer, feed_dict={x: img})
+
+    """ Normal Python Gig """
+    # projected gradient descent
+    for i in range(steps):
+        # gradient descent step
+        _, loss_value, target_prob, lab_norm = sess.run(
+            [optim_step, average_loss, prob, norm],
+            feed_dict={c: lagrange_c, learning_rate: lr, y_hat: target})
+        # project step
+        sess.run(project_step)
+        if (i+1) % 25 == 0:
+            print('step %d, loss=%g, prob=%g, lab_norm_diff=%g' % (i+1, loss_value, target_prob, lab_norm))
+
+    adv_robust = x_hat.eval() # retrieve the adversarial example
+    return adv_robust
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate robust adversarial example which survives real world perturbations')
@@ -393,7 +529,7 @@ if __name__ == "__main__":
             saver = tf.train.Saver(adversarial_vars)
         
         #TODO add target_class support
-        adversarial_img = eot_adversarial_synthesizer(img, restore=args.restore, restore_vars=adversarial_vars)
+        adversarial_img = eot_adversarial_synthesizer_lab_lgr(img, restore=args.restore, saver=saver)
 
         #save progress
         save_path = saver.save(sess, os.path.join(__location__, "tmp/model.ckpt"))
@@ -403,7 +539,7 @@ if __name__ == "__main__":
         # Verify adversariality maintains under transformations, this clobbers the x_hat tensor so make sure to save before
         test_results = verify_transformations(adversarial_img, args.correct_class, args.target_class, plot=not args.noplot, save=args.save)
         if args.save:
-            scipy.misc.imsave(os.path.join(savedir, 'adversary.jpeg'), color.lab2rgb(adversarial_img))
+            scipy.misc.imsave(os.path.join(savedir, 'adversary.jpeg'), adversarial_img)
             with open(os.path.join(savedir,'adversarial_classification_scores.txt'), 'w') as f:
                 f.write(base_results)
                 f.write('\n\n')
