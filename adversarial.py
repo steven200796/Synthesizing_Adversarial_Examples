@@ -461,7 +461,7 @@ def eot_adversarial_synthesizer_lab_lgr(img, eps=8/255.0, lr=2e-1, steps=400, ta
     adv_robust = x_hat.eval() # retrieve the adversarial example
     return adv_robust
 
-def eot_adversarial_synthesizer_lab_lgr_composition(img, eps=8/255.0, lr=8e-1, steps=1000, target=924, lagrange_c=0.03, restore=False, saver=None, save=False):
+def eot_adversarial_synthesizer_lab_lgr_composition(img, eps=8/255.0, lr=8e-1, steps=3000, target=924, lagrange_c=0.03, restore=False, saver=None, save=False):
     """
     synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
 
@@ -494,36 +494,33 @@ def eot_adversarial_synthesizer_lab_lgr_composition(img, eps=8/255.0, lr=8e-1, s
     with tf.control_dependencies([projected]):
         project_step = tf.assign(x_hat, projected)
 
-    num_samples = 25 
+    num_samples = 30 
     average_loss = 0
-    average_prob = 0
+    average_log = 0
     average_norm = 0
 
-    for transform in transformations:
-        for i in range(num_samples):
-            transformed = sample_transformations(image, len(transformations))
-            _, transformed_prob = inception(transformed, reuse=True)
- 
-            norm = tf.reduce_sum(tf.square(
-                    tf.subtract(
-                        x_lab,
-                        preprocess_lab(rgb_to_lab(
-                        x_hat
-                        ))
-                        )))
+    for i in range(num_samples):
+        transformed = sample_transformations(image, len(transformations))
+        _, transformed_prob = inception(transformed, reuse=True)
 
-            prob = transformed_prob[0, target]
+        norm = tf.reduce_sum(tf.square(
+                tf.subtract(
+                    x_lab,
+                    preprocess_lab(rgb_to_lab(
+                    x_hat
+                    ))
+                    )))
 
-            average_prob += prob / (num_samples * len(transformations))
-            average_norm += norm / (num_samples * len(transformations))
-            average_loss += tf.add(
-                    tf.negative(tf.log(prob)), 
-                    tf.scalar_mul(
-                        c, 
-                        norm
-                        )
-                ) / (num_samples * len(transformations))
-            
+        average_log += tf.nn.softmax_cross_entropy_with_logits(
+            logits=transformed_logits, labels=labels) / num_samples 
+        average_norm += norm / num_samples
+    average_loss += tf.add(
+            average_log, 
+            tf.scalar_mul(
+                c, 
+                average_norm
+                )
+            )  
 
     temp = set(tf.all_variables())
     optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(average_loss,var_list=[x_hat]) 
@@ -544,22 +541,20 @@ def eot_adversarial_synthesizer_lab_lgr_composition(img, eps=8/255.0, lr=8e-1, s
     # projected gradient descent
     for i in range(steps):
         # gradient descent step
-        _, loss_value, target_prob, d_norm = sess.run(
-            [optim_step, average_loss, average_prob, average_norm],
+        _, loss_value, target_log, d_norm = sess.run(
+            [optim_step, average_loss, average_log, average_norm],
             feed_dict={x: img, c: lagrange_c, learning_rate: lr, y_hat: target})
         # project step
-        print('step %d, loss=%g, prob=%g, norm=%g' % (i+1, loss_value, target_prob, d_norm))
+        print('step %d, loss=%g, prob=%g, norm=%g' % (i+1, loss_value, target_log, d_norm))
         sess.run(project_step)
         if (i+1) % 50 == 0:
-            print('step %d, loss=%g, prob=%g, norm=%g' % (i+1, loss_value, target_prob, d_norm))
+            print('step %d, loss=%g, prob=%g, norm=%g' % (i+1, loss_value, target_log, d_norm))
         if save and (i+1)%100 == 0:
             adv_robust = x_hat.eval() # retrieve the adversarial example 
             scipy.misc.imsave(os.path.join(savedir, 'adversary.jpeg'), adv_robust)
 
     adv_robust = x_hat.eval() # retrieve the adversarial example
     return adv_robust
-
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate robust adversarial example which survives real world perturbations')
