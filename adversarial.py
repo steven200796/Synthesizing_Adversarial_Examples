@@ -30,6 +30,7 @@ import argparse
 import numpy as np
 import random
 import scipy.misc
+from tensorflow.python.framework import ops
 
 from datetime import datetime
 
@@ -42,7 +43,6 @@ def norm_grad(x, dy):
 @function.Defun(tf.float32, grad_func=norm_grad)
 def norm(x):
     return tf.norm(x)
-
 
 savedir = None
 
@@ -64,7 +64,7 @@ def preprocess_lab(lab):
         # L_chan: black and white with input range [0, 100]
         # a_chan/b_chan: color channels with input range ~[-110, 110], not exact
         # [0, 100] => [-1, 1],  ~[-110, 110] => [-1, 1]
-        return [L_chan / 50 - 1, a_chan / 110, b_chan / 110]
+        return [L_chan / 50 - 1, a_chan / 128, b_chan / 128]
 
 def deprocess_lab(L_chan, a_chan, b_chan):
     with tf.name_scope("deprocess_lab"):
@@ -166,6 +166,9 @@ def lab_to_rgb(lab):
 
     return tf.reshape(srgb_pixels, tf.shape(lab))
 
+def rgb_to_lab_norm(rgb):
+    return tf.stack(preprocess_lab(rgb_to_lab(rgb)))
+
 def inception(image, reuse):
     preprocessed = tf.multiply(tf.subtract(tf.expand_dims(image, 0), 0.5), 2.0)
     arg_scope = nets.inception.inception_v3_arg_scope(weight_decay=0.0)
@@ -214,9 +217,9 @@ def classify(img, correct_class=None, target_class=None, plot=False, save=False,
         fig.subplots_adjust(bottom=0.2)
         if save:
             if target_class:
-                plt.savefig(os.path.join(savedir, "adversary_results{!s}.jpeg".format('_'+tag if tag else tag)))
+                plt.savefig(os.path.join(savedir, "adversary_results{!s}.png".format('_'+tag if tag else tag)))
             else:
-                plt.savefig(os.path.join(savedir, "initial_results.jpeg"))
+                plt.savefig(os.path.join(savedir, "initial_results.png"))
         if plot:
             plt.show()
     
@@ -227,7 +230,7 @@ def classify(img, correct_class=None, target_class=None, plot=False, save=False,
     print(print_string + '\n')
     return print_string
 
-def rotate_transform(image, min_angle=-np.pi, max_angle=np.pi):
+def rotate_transform(image, min_angle=-np.pi/8, max_angle=np.pi/8):
     rotated_img = tf.contrib.image.rotate(image, tf.random_uniform((), minval=min_angle, maxval=max_angle))
     return rotated_img
 
@@ -241,13 +244,19 @@ def scale_transform(image, min_scale=0.9, max_scale=1.4):
     return scaled_img
 
 # -0.05 and 0.05
-def brightness_transform(image, min_delta=-0.05, max_delta=0.05):
-    brightened_img = tf.clip_by_value(tf.image.adjust_brightness(image, tf.random_uniform((), minval=min_delta, maxval=max_delta)), 0, 1)
-    return brightened_img
+def brightness_transform(imgs, min_delta=-0.05, max_delta=0.05):
+    images = ops.convert_to_tensor(imgs) 
+    if len(images.get_shape()) == 3:
+        images = tf.expand_dims(images, 0)
+    brightened_images = tf.clip_by_value(images + tf.random_uniform((), minval=min_delta, maxval=max_delta), 0, 1)
+    return brightened_images
 
-def gaussian_noise_transform(image, min_noise=0, max_noise=0.1):
-    noise = tf.random_normal(shape=tf.shape(image), mean=0.0, stddev=max_noise, dtype=tf.float32) 
-    noisy_img = tf.clip_by_value(noise + image, 0, 1)
+def gaussian_noise_transform(imgs, min_noise=0, max_noise=0.1):
+    images = ops.convert_to_tensor(imgs) 
+    if len(images.get_shape()) == 3:
+        images = tf.expand_dims(images, 0)
+    noise = tf.random_normal(shape=(299,299,3), mean=0.0, stddev=max_noise, dtype=tf.float32) 
+    noisy_img = tf.clip_by_value(images + tf.tile(tf.expand_dims(noise, 0), [tf.shape(images)[0], 1, 1, 1]), 0, 1)
     return noisy_img
 
 def translation_transform(image, min_translate=-80, max_translate=80, interpolation='NEAREST'):
@@ -260,12 +269,18 @@ def translation_transform(image, min_translate=-80, max_translate=80, interpolat
 #   translated_img = tf.contrib.image.translate(image, tf.stack([tf.random_uniform((), minval=min_translate, maxval=max_translate), tf.random_uniform((), minval=min_translate, maxval=max_translate)]))
 #   return translated_img
 
-transformations = [scale_transform, rotate_transform, brightness_transform, gaussian_noise_transform, translation_transform]
+transformations = [
+        scale_transform, 
+        brightness_transform,
+        gaussian_noise_transform,
+        translation_transform, 
+        rotate_transform
+ ]
 
 def verify_transformations(img, correct_class, target_class, plot=True, save=False, transform_list=transformations):
     results = []
     for transform in transform_list:
-        transform_image = transform(img)
+        transform_image = tf.squeeze(transform(img))
         transform_example = transform_image.eval()
         results.append(classify(transform_example, correct_class=correct_class, target_class=target_class, plot=plot, save=save, tag=transform.__name__))
     # scramble the transforms and apply them all
@@ -273,7 +288,7 @@ def verify_transformations(img, correct_class, target_class, plot=True, save=Fal
         transform_example = np.copy(img)
         for transform in transformations:
             #sorted(transform_list, key=lambda x: random.random()):
-            transform_image = transform(transform_example)
+            transform_image = tf.squeeze(transform(transform_example))
             transform_example = transform_image.eval()
         results.append(classify(transform_example, correct_class=correct_class, target_class=target_class, plot=plot, save=save, tag='Composition_{:d}'.format(i)))
     return "\n\n".join(results)
@@ -358,12 +373,12 @@ def eot_adversarial_synthesizer(img, eps=8/255.0, lr=3e-4, steps=500, target=924
             print('step %d, loss=%g' % (i+1, loss_value))
         if save and (i+1)%100 == 0:
             adv_robust = x_hat.eval() # retrieve the adversarial example 
-            scipy.misc.imsave(os.path.join(savedir, 'adversary.jpeg'), adv_robust)
+            scipy.misc.imsave(os.path.join(savedir, 'adversary.png'), adv_robust)
 
     adv_robust = x_hat.eval() # retrieve the adversarial example
     return adv_robust
 
-def eot_adversarial_synthesizer_lab_lgr(img, eps=8/255.0, lr=2e-1, steps=400, target=924, lagrange_c=0.08, restore=False, saver=None, save=False):
+def eot_adversarial_synthesizer_lab_lgr(img, eps=8/255.0, lr=2e-1, steps=3000, target=924, lagrange_c=0.05, restore=False, saver=None, save=False):
     """
     synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
 
@@ -428,19 +443,18 @@ def eot_adversarial_synthesizer_lab_lgr(img, eps=8/255.0, lr=2e-1, steps=400, ta
             
 
     temp = set(tf.all_variables())
-    optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(average_loss,var_list=[x_hat]) 
+    optim_step = tf.train.AdamOptimizer(learning_rate).minimize(average_loss,var_list=[x_hat]) 
 
     # Hacky Adam Variables Initializer
     sess.run(tf.initialize_variables(set(tf.all_variables()) - temp))
 
-    #initialize variables
-    sess.run(x_lab.initializer, feed_dict={x: img})
-    sess.run(assign_op, feed_dict={x: img})
-
     if restore:
         # restore adversarial model
         saver.restore(sess, os.path.join(__location__, "tmp/model.ckpt"))
-
+    else:
+        #initialize variables
+        sess.run(x_lab.initializer, feed_dict={x: img})
+        sess.run(assign_op, feed_dict={x: img})
 
     """ Normal Python Gig """
     # projected gradient descent
@@ -456,12 +470,12 @@ def eot_adversarial_synthesizer_lab_lgr(img, eps=8/255.0, lr=2e-1, steps=400, ta
             print('step %d, loss=%g, prob=%g, norm=%g' % (i+1, loss_value, target_prob, d_norm))
         if save and (i+1)%100 == 0:
             adv_robust = x_hat.eval() # retrieve the adversarial example 
-            scipy.misc.imsave(os.path.join(savedir, 'adversary.jpeg'), adv_robust)
+            scipy.misc.imsave(os.path.join(savedir, 'adversary.png'), adv_robust)
 
     adv_robust = x_hat.eval() # retrieve the adversarial example
     return adv_robust
 
-def eot_adversarial_synthesizer_lab_lgr_composition(img, eps=8/255.0, lr=8e-1, steps=3000, target=924, lagrange_c=0.03, restore=False, saver=None, save=False):
+def eot_adversarial_synthesizer_lab_lgr_composition(img, eps=8/255.0, lr=1e-3, steps=3000, target=924, lagrange_c=0.03, restore=False, saver=None, save=False):
     """
     synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
 
@@ -475,7 +489,6 @@ def eot_adversarial_synthesizer_lab_lgr_composition(img, eps=8/255.0, lr=8e-1, s
     x = tf.placeholder(tf.float32, (299, 299, 3))  
 
     c = tf.placeholder(tf.float32, ())
-    # Must denorm x to transform to LAB
 
     x_lab = tf.Variable(tf.stack(preprocess_lab(rgb_to_lab(x))))
 
@@ -494,14 +507,14 @@ def eot_adversarial_synthesizer_lab_lgr_composition(img, eps=8/255.0, lr=8e-1, s
     with tf.control_dependencies([projected]):
         project_step = tf.assign(x_hat, projected)
 
-    num_samples = 30 
+    num_samples = 25 
     average_loss = 0
     average_log = 0
     average_norm = 0
 
     for i in range(num_samples):
-        transformed = sample_transformations(image, len(transformations))
-        _, transformed_prob = inception(transformed, reuse=True)
+        transformed = sample_transformations(image, 2) 
+        transformed_logits, _ = inception(transformed, reuse=True)
 
         norm = tf.reduce_sum(tf.square(
                 tf.subtract(
@@ -536,7 +549,6 @@ def eot_adversarial_synthesizer_lab_lgr_composition(img, eps=8/255.0, lr=8e-1, s
         # restore adversarial model
         saver.restore(sess, os.path.join(__location__, "tmp/model.ckpt"))
 
-
     """ Normal Python Gig """
     # projected gradient descent
     for i in range(steps):
@@ -551,10 +563,107 @@ def eot_adversarial_synthesizer_lab_lgr_composition(img, eps=8/255.0, lr=8e-1, s
             print('step %d, loss=%g, prob=%g, norm=%g' % (i+1, loss_value, target_log, d_norm))
         if save and (i+1)%100 == 0:
             adv_robust = x_hat.eval() # retrieve the adversarial example 
-            scipy.misc.imsave(os.path.join(savedir, 'adversary.jpeg'), adv_robust)
+            scipy.misc.imsave(os.path.join(savedir, 'adversary.png'), adv_robust)
 
     adv_robust = x_hat.eval() # retrieve the adversarial example
     return adv_robust
+
+def eot(img, eps=8/255.0, lr=1e-3, steps=10, target=924, lagrange_c=0.05, restore=False, save=False):
+    """
+    synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
+
+    :param eps: allowed error 
+    :param lr: learning rate 
+    :param target: target imagenet class, default is 924 'guacamole'
+    :param lagrange_c: lagrangian relaxation constant
+    """
+
+    """ Tensorflow Portion """
+    # initial starting image
+    x_init = tf.placeholder(tf.float32, (299, 299, 3))
+
+    c = tf.placeholder(tf.float32, ())
+    learning_rate = tf.placeholder(tf.float32, ())
+    y_hat = tf.placeholder(tf.int32, ())
+    labels = tf.one_hot(y_hat, 1000)
+
+    x = tf.Variable(x_init)
+    x_hat = tf.Variable(x_init)
+
+    #project onto valid range
+    projected = tf.clip_by_value(x_hat, 0, 1)
+    with tf.control_dependencies([projected]):
+        project_step = tf.assign(x_hat, projected)
+
+    num_samples = 40 
+    average_loss = 0
+    average_prob = 0
+    average_norm = 0
+
+    for i in range(num_samples):
+        x_t, x_hat_t = tf.unstack(sample_transformations(tf.stack([x, x_hat]), len(transformations))) 
+        transformed_logits, _ = inception(x_hat_t, reuse=True)
+
+        norm = tf.reduce_sum(tf.square(
+                tf.subtract(
+                    rgb_to_lab_norm(x_t), 
+                    rgb_to_lab_norm(x_hat_t)
+                    )))
+        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
+            logits=transformed_logits, labels=labels)
+
+        average_prob += tf.exp(-cross_entropy) / num_samples
+        average_norm += norm / num_samples 
+
+        average_loss += tf.add(
+                cross_entropy, 
+                tf.scalar_mul(
+                    c, 
+                    norm
+                    )
+                ) / num_samples  
+
+    temp = set(tf.all_variables())
+    optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(average_loss,var_list=[x_hat]) 
+
+    # Hacky Adam Variables Initializer
+    sess.run(tf.initialize_variables(set(tf.all_variables()) - temp))
+
+    adversarial_vars = [
+        var for var in tf.global_variables()
+        if not var.name.startswith('InceptionV3/')
+    ]
+    saver = tf.train.Saver(adversarial_vars)
+
+    if restore:
+        # restore adversarial model
+        saver.restore(sess, os.path.join(__location__, "tmp/model.ckpt"))
+    else:
+        #initialize variables
+        sess.run([x.initializer, x_hat.initializer], feed_dict={x_init: img})
+
+    """ Normal Python Gig """
+    # projected gradient descent
+    for i in range(steps):
+        # gradient descent step
+        _, loss_value, average_prob_value, average_norm_value = sess.run(
+            [optim_step, average_loss, average_prob, average_norm],
+            feed_dict={c: lagrange_c, learning_rate: lr, y_hat: target})
+        # project step
+        print('step %d, loss=%g, prob=%g, norm=%g' % (i+1, loss_value, average_prob_value, average_norm_value))
+        sess.run(project_step)
+        if (i+1) % 50 == 0:
+            print('step %d, loss=%g, prob=%g, norm=%g' % (i+1, loss_value, average_prob_value, average_norm_value))
+        if save and (i+1)%100 == 0:
+            adv_robust = x_hat.eval() # retrieve the adversarial example 
+            scipy.misc.imsave(os.path.join(savedir, 'adversary.png'), adv_robust)
+            #save progress
+            save_path = saver.save(sess, os.path.join(__location__, "tmp/model.ckpt"))
+            print("adversarial generation checkpoint saved in path: %s" % save_path)
+
+    adv_robust = x_hat.eval() # retrieve the adversarial example
+    return adv_robust
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate robust adversarial example which survives real world perturbations')
@@ -619,9 +728,6 @@ if __name__ == "__main__":
     image = tf.Variable(tf.zeros((299, 299, 3)))
     logits, probs = inception(image, reuse=False)
 
-    # Load Adversarial Model
-    #eot_adversarial_synthesizer(image, reuse=False)
-
     tf.logging.set_verbosity(tf.logging.ERROR)
 
     # create model 
@@ -648,27 +754,15 @@ if __name__ == "__main__":
 
         if args.classify:
             exit()
-            
-        adversarial_vars=[]
-        if args.save or args.restore:
-            adversarial_vars = [
-                var for var in tf.global_variables()
-                if not var.name.startswith('InceptionV3/')
-            ]
-            saver = tf.train.Saver(adversarial_vars)
         
         #TODO add target_class support
-        adversarial_img = eot_adversarial_synthesizer_lab_lgr_composition(img, restore=args.restore, saver=saver, save=args.save)
+        adversarial_img = eot(img, restore=args.restore, save=args.save)
 
-        #save progress
-        save_path = saver.save(sess, os.path.join(__location__, "tmp/model.ckpt"))
-        print("adversarial generation checkpoint saved in path: %s" % save_path)
- 
         base_results = classify(adversarial_img, correct_class=args.correct_class, target_class=args.target_class, plot=not args.noplot, save=args.save, tag='base')
         # Verify adversariality maintains under transformations, this clobbers the x_hat tensor so make sure to save before
         test_results = verify_transformations(adversarial_img, args.correct_class, args.target_class, plot=not args.noplot, save=args.save)
         if args.save:
-            scipy.misc.imsave(os.path.join(savedir, 'adversary.jpeg'), adversarial_img)
+            scipy.misc.imsave(os.path.join(savedir, 'adversary.png'), adversarial_img)
             with open(os.path.join(savedir,'adversarial_classification_scores.txt'), 'w') as f:
                 f.write(base_results)
                 f.write('\n\n')
