@@ -167,7 +167,14 @@ def lab_to_rgb(lab):
     return tf.reshape(srgb_pixels, tf.shape(lab))
 
 def rgb_to_lab_norm(rgb):
-    return tf.stack(preprocess_lab(rgb_to_lab(rgb)))
+    return tf.stack(preprocess_lab(rgb_to_lab(rgb)), axis=2)
+    # a1 = tf.Assert(tf.less_equal(tf.reduce_max(x), 1.), [x])
+    # a2 = tf.Assert(tf.greater_equal(tf.reduce_min(x), -1.), [x])
+    # a3 = tf.verify_tensor_all_finite(x, 'sucks to suck')
+    # x = tf.Print(x, [tf.shape(x), tf.reduce_min(x), tf.reduce_max(x)])
+    # with tf.control_dependencies([a1, a2, a3]):
+        # x = tf.identity(x)
+
 
 def inception(image, reuse):
     preprocessed = tf.multiply(tf.subtract(tf.expand_dims(image, 0), 0.5), 2.0)
@@ -238,7 +245,7 @@ def scale_transform(image, min_scale=0.9, max_scale=1.4):
     scale = tf.random_uniform((), minval=min_scale, maxval=max_scale)
     height = tf.cast(tf.multiply(scale, 299), tf.int32)
     width = tf.cast(tf.multiply(scale, 299), tf.int32)
-    scaled_img = tf.image.resize_images(image, tf.stack([height, width])) 
+    scaled_img = tf.image.resize_images(image, tf.stack([height, width]), align_corners=True) 
 
     scaled_img = tf.image.resize_image_with_crop_or_pad(scaled_img, 299, 299)
     return scaled_img
@@ -271,10 +278,10 @@ def translation_transform(image, min_translate=-80, max_translate=80, interpolat
 
 transformations = [
         scale_transform, 
+        translation_transform, 
+        rotate_transform,
         brightness_transform,
         gaussian_noise_transform,
-        translation_transform, 
-        rotate_transform
  ]
 
 def verify_transformations(img, correct_class, target_class, plot=True, save=False, transform_list=transformations):
@@ -670,7 +677,7 @@ def eot(img, eps=8/255.0, lr=1e-3, steps=1000, target=924, lagrange_c=150, resto
     adv_robust = x_hat.eval() # retrieve the adversarial example
     return adv_robust
 
-def eot2(img, eps=8/255.0, lr=1e-1, steps=2000, target=924, lagrange_c=0.1, restore=False, save=False):
+def eot2(img, target, lr, steps, num_samples, lagrange_c, eps=5.0/255.0, restore=False, save=False):
     """
     synthesis a robust adversarial example with EOT (expectation over transformation) algorithm, Athalye et al. 
 
@@ -681,7 +688,6 @@ def eot2(img, eps=8/255.0, lr=1e-1, steps=2000, target=924, lagrange_c=0.1, rest
     """
 
     """ Tensorflow Portion """
-    num_samples = 35 
     print('learning rate: %g \nlagrange_constraint: %g \nbatch_size: %d' %(lr, lagrange_c, num_samples))
     # initial starting image
     x_init = tf.placeholder(tf.float32, (299, 299, 3))
@@ -692,7 +698,7 @@ def eot2(img, eps=8/255.0, lr=1e-1, steps=2000, target=924, lagrange_c=0.1, rest
     labels = tf.one_hot(y_hat, 1000)
 
     x = tf.Variable(x_init)
-    x_hat = tf.Variable(x_init + tf.random_normal(shape=(299,299,3), mean=0.0, stddev=0.02, dtype=tf.float32))
+    x_hat = tf.Variable(x_init)# + tf.random_normal(shape=(299,299,3), mean=0.0, stddev=0.001, dtype=tf.float32))
 
     #project onto valid range
     epsilon = tf.placeholder(tf.float32, ())
@@ -716,10 +722,10 @@ def eot2(img, eps=8/255.0, lr=1e-1, steps=2000, target=924, lagrange_c=0.1, rest
 
         transformed_logits, _ = inception(x_hat_t, reuse=True)
 
-        norm = tf.reduce_sum(tf.square(
+        norm = tf.reduce_max(tf.square(
                 tf.subtract(
-                    x_t, 
-                    x_hat_t
+                    rgb_to_lab_norm(x_t), 
+                    rgb_to_lab_norm(x_hat_t)
                     )))
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
             logits=transformed_logits, labels=labels)
@@ -762,7 +768,7 @@ def eot2(img, eps=8/255.0, lr=1e-1, steps=2000, target=924, lagrange_c=0.1, rest
             [optim_step, average_loss, average_prob, average_norm],
             feed_dict={c: lagrange_c, learning_rate: lr, y_hat: target})
         # project step
-        print('step %d, loss=%g, prob=%g, norm=%g' % (i+1, loss_value, average_prob_value, average_norm_value))
+        #print('step %d, loss=%g, prob=%g, norm=%g' % (i+1, loss_value, average_prob_value, average_norm_value))
         sess.run(project_step, feed_dict={epsilon: eps})
         if (i+1) % 50 == 0:
             print('step %d, loss=%g, prob=%g, norm=%g' % (i+1, loss_value, average_prob_value, average_norm_value))
@@ -798,6 +804,15 @@ if __name__ == "__main__":
                         help='ground truth class of input image')
     parser.add_argument('--target_class', type=int, default=924,
                         help='targeted adversarial class of input image')
+
+    parser.add_argument('--num_samples', type=int, default=30,
+                        help='batch size for SGD, should be higher for more complicated distributions')
+    parser.add_argument('--learning_rate', type=float, default=1e-3,
+                        help='learning rate for network')
+    parser.add_argument('--lagrange_c', type=float, default=0.3,
+                        help='lagrangian constraint which weighs the importance of the norm')
+    parser.add_argument('--steps', type=int, default=2000,
+                        help='number of training steps')
 
     args = parser.parse_args()
 
@@ -869,7 +884,7 @@ if __name__ == "__main__":
             exit()
         
         #TODO add target_class support
-        adversarial_img = eot2(img, restore=args.restore, save=args.save)
+        adversarial_img = eot2(img, target=args.target_class, lr=args.learning_rate, steps=args.steps, num_samples=args.num_samples, lagrange_c=args.lagrange_c, restore=args.restore, save=args.save)
 
         base_results = classify(adversarial_img, correct_class=args.correct_class, target_class=args.target_class, plot=not args.noplot, save=args.save, tag='base')
         # Verify adversariality maintains under transformations, this clobbers the x_hat tensor so make sure to save before
