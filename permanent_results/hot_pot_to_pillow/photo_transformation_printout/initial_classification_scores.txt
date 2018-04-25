@@ -1,0 +1,11 @@
+Initial Results 
+       pillow        : 0.130
+     hair slide      : 0.088
+        tray         : 0.076
+    face powder      : 0.050
+        bib          : 0.045
+       buckle        : 0.040
+frying pan, frypan, skillet : 0.035
+       plate         : 0.028
+chocolate sauce, chocolate syrup : 0.027
+       purse         : 0.022

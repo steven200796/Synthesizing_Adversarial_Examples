@@ -1,0 +1,11 @@
+Initial Results 
+  cockroach, roach   : 0.853
+        bee          : 0.011
+ apiary, bee house   : 0.003
+hand blower, blow dryer, blow drier, hair dryer, hair drier : 0.003
+     honeycomb       : 0.003
+ teddy, teddy bear   : 0.003
+       maraca        : 0.002
+      papillon       : 0.002
+     Chihuahua       : 0.001 correct 
+wire-haired fox terrier : 0.001

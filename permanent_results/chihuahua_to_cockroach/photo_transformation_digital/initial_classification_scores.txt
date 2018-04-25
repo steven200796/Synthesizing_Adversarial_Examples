@@ -1,0 +1,11 @@
+Initial Results 
+  cockroach, roach   : 0.958
+       isopod        : 0.011
+chambered nautilus, pearly nautilus, nautilus : 0.001
+       snail         : 0.001
+    hermit crab      : 0.001
+hand blower, blow dryer, blow drier, hair dryer, hair drier : 0.001
+ant, emmet, pismire  : 0.001
+        tick         : 0.000
+        bee          : 0.000
+Sealyham terrier, Sealyham : 0.000

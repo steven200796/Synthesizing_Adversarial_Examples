@@ -1,0 +1,11 @@
+Initial Results 
+     guacamole       : 0.939
+  tabby, tabby cat   : 0.009 correct 
+     tiger cat       : 0.003
+  bulletproof vest   : 0.003
+  lynx, catamount    : 0.002
+       mortar        : 0.001
+    bell pepper      : 0.001
+    Egyptian cat     : 0.000
+      burrito        : 0.000
+  feather boa, boa   : 0.000
