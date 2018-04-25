@@ -1,0 +1,11 @@
+Initial Results 
+  hot pot, hotpot    : 0.743 correct 
+       ladle         : 0.077
+       plate         : 0.014
+ice cream, icecream  : 0.009
+ caldron, cauldron   : 0.008
+       trifle        : 0.006
+chocolate sauce, chocolate syrup : 0.006
+    wooden spoon     : 0.006
+        wok          : 0.005
+     soup bowl       : 0.004

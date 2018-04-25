@@ -1,0 +1,131 @@
+Adversarial Results base
+     guacamole       : 0.985 target
+  bulletproof vest   : 0.001
+      broccoli       : 0.001
+     tiger cat       : 0.000
+    bell pepper      : 0.000
+       mortar        : 0.000
+  tabby, tabby cat   : 0.000 correct 
+   custard apple     : 0.000
+    Egyptian cat     : 0.000
+      burrito        : 0.000
+
+Adversarial Results brightness_transform
+     guacamole       : 0.985 target
+  bulletproof vest   : 0.001
+      broccoli       : 0.001
+     tiger cat       : 0.000
+    bell pepper      : 0.000
+       mortar        : 0.000
+  tabby, tabby cat   : 0.000 correct 
+   custard apple     : 0.000
+    Egyptian cat     : 0.000
+      burrito        : 0.000
+
+Adversarial Results gaussian_noise_transform
+     guacamole       : 0.994 target
+      broccoli       : 0.001
+     tiger cat       : 0.001
+  bulletproof vest   : 0.000
+   custard apple     : 0.000
+  tabby, tabby cat   : 0.000 correct 
+    Granny Smith     : 0.000
+       mortar        : 0.000
+   bagel, beigel     : 0.000
+   cucumber, cuke    : 0.000
+
+Adversarial Results scale_transform
+     guacamole       : 0.985 target
+  bulletproof vest   : 0.003
+      broccoli       : 0.001
+     tiger cat       : 0.000
+       mortar        : 0.000
+  tabby, tabby cat   : 0.000 correct 
+    bell pepper      : 0.000
+   custard apple     : 0.000
+German shepherd, German shepherd dog, German police dog, alsatian : 0.000
+leopard, Panthera pardus : 0.000
+
+Adversarial Results rotate_transform
+     guacamole       : 0.989 target
+  bulletproof vest   : 0.001
+       mortar        : 0.000
+      burrito        : 0.000
+     tiger cat       : 0.000
+  tabby, tabby cat   : 0.000 correct 
+German shepherd, German shepherd dog, German police dog, alsatian : 0.000
+can opener, tin opener : 0.000
+     car mirror      : 0.000
+    planetarium      : 0.000
+
+Adversarial Results translation_transform
+     guacamole       : 0.989 target
+  bulletproof vest   : 0.002
+      broccoli       : 0.001
+     tiger cat       : 0.000
+       mortar        : 0.000
+      burrito        : 0.000
+  tabby, tabby cat   : 0.000 correct 
+    bell pepper      : 0.000
+ Australian terrier  : 0.000
+      trombone       : 0.000
+
+Adversarial Results Composition_0
+     guacamole       : 0.997 target
+     tiger cat       : 0.000
+      broccoli       : 0.000
+      burrito        : 0.000
+  tabby, tabby cat   : 0.000 correct 
+  bulletproof vest   : 0.000
+       mortar        : 0.000
+  lynx, catamount    : 0.000
+  feather boa, boa   : 0.000
+   custard apple     : 0.000
+
+Adversarial Results Composition_1
+     guacamole       : 0.976 target
+  lynx, catamount    : 0.007
+      burrito        : 0.001
+  bulletproof vest   : 0.001
+  tabby, tabby cat   : 0.001 correct 
+       mortar        : 0.001
+     tiger cat       : 0.000
+lion, king of beasts, Panthera leo : 0.000
+television, television system : 0.000
+leopard, Panthera pardus : 0.000
+
+Adversarial Results Composition_2
+     guacamole       : 0.999 target
+  bulletproof vest   : 0.000
+  tabby, tabby cat   : 0.000 correct 
+     tiger cat       : 0.000
+       mortar        : 0.000
+      burrito        : 0.000
+  lynx, catamount    : 0.000
+      broccoli       : 0.000
+     car mirror      : 0.000
+   custard apple     : 0.000
+
+Adversarial Results Composition_3
+     guacamole       : 0.998 target
+  bulletproof vest   : 0.000
+  lynx, catamount    : 0.000
+       mortar        : 0.000
+      burrito        : 0.000
+     tiger cat       : 0.000
+  tabby, tabby cat   : 0.000 correct 
+       dough         : 0.000
+lion, king of beasts, Panthera leo : 0.000
+   custard apple     : 0.000
+
+Adversarial Results Composition_4
+     guacamole       : 0.997 target
+  bulletproof vest   : 0.000
+  lynx, catamount    : 0.000
+     tiger cat       : 0.000
+      burrito        : 0.000
+       mortar        : 0.000
+  tabby, tabby cat   : 0.000 correct 
+      broccoli       : 0.000
+lion, king of beasts, Panthera leo : 0.000
+ screen, CRT screen  : 0.000

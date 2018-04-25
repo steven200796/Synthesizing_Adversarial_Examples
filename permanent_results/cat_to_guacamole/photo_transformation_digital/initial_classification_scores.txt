@@ -1,0 +1,11 @@
+Initial Results 
+     guacamole       : 0.639
+  tabby, tabby cat   : 0.096 correct 
+      broccoli       : 0.062
+     tiger cat       : 0.051
+    Egyptian cat     : 0.022
+  bulletproof vest   : 0.005
+  lynx, catamount    : 0.003
+    head cabbage     : 0.003
+leopard, Panthera pardus : 0.002
+ screen, CRT screen  : 0.002

@@ -15,8 +15,8 @@ import os
 import json
 
 # Load Plotting Module
-# import matplotlib
-# matplotlib.use('Agg')
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # Image Loading
@@ -167,13 +167,8 @@ def lab_to_rgb(lab):
     return tf.reshape(srgb_pixels, tf.shape(lab))
 
 def rgb_to_lab_norm(rgb):
-    return tf.stack(preprocess_lab(rgb_to_lab(rgb)), axis=2)
-    # a1 = tf.Assert(tf.less_equal(tf.reduce_max(x), 1.), [x])
-    # a2 = tf.Assert(tf.greater_equal(tf.reduce_min(x), -1.), [x])
-    # a3 = tf.verify_tensor_all_finite(x, 'sucks to suck')
-    # x = tf.Print(x, [tf.shape(x), tf.reduce_min(x), tf.reduce_max(x)])
-    # with tf.control_dependencies([a1, a2, a3]):
-        # x = tf.identity(x)
+    x= tf.stack(preprocess_lab(rgb_to_lab(rgb)), axis=2)
+    return x
 
 
 def inception(image, reuse):
@@ -266,7 +261,7 @@ def gaussian_noise_transform(imgs, min_noise=0, max_noise=0.1):
     noisy_img = tf.clip_by_value(images + tf.tile(tf.expand_dims(noise, 0), [tf.shape(images)[0], 1, 1, 1]), 0.0, 1.0)
     return noisy_img
 
-def translation_transform(image, min_translate=-80, max_translate=80, interpolation='NEAREST'):
+def translation_transform(image, min_translate=-40, max_translate=40, interpolation='NEAREST'):
     tx = tf.random_uniform((), minval=min_translate, maxval=max_translate) 
     ty = tf.random_uniform((), minval=min_translate, maxval=max_translate)
     transforms = [1, 0, -tx, 0, 1, -ty, 0, 0]
@@ -276,14 +271,21 @@ def translation_transform(image, min_translate=-80, max_translate=80, interpolat
 #   translated_img = tf.contrib.image.translate(image, tf.stack([tf.random_uniform((), minval=min_translate, maxval=max_translate), tf.random_uniform((), minval=min_translate, maxval=max_translate)]))
 #   return translated_img
 
+# transformations = [
+        # brightness_transform,
+        # gaussian_noise_transform, 
+        # scale_transform, 
+        # rotate_transform,
+        # translation_transform,
+# ]
+
 transformations = [
         scale_transform, 
-        translation_transform, 
         rotate_transform,
         brightness_transform,
-        gaussian_noise_transform,
- ]
-
+        gaussian_noise_transform, 
+        translation_transform,
+]
 def verify_transformations(img, correct_class, target_class, plot=True, save=False, transform_list=transformations):
     results = []
     for transform in transform_list:
@@ -619,8 +621,8 @@ def eot(img, eps=8/255.0, lr=1e-3, steps=1000, target=924, lagrange_c=150, resto
 
         norm = tf.reduce_sum(tf.square(
                 tf.subtract(
-                    rgb_to_lab_norm(x_t), 
-                    rgb_to_lab_norm(x_hat_t)
+                    x_t, 
+                    x_hat_t
                     )))
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
             logits=transformed_logits, labels=labels)
@@ -704,7 +706,7 @@ def eot2(img, target, lr, steps, num_samples, lagrange_c, eps=5.0/255.0, restore
     epsilon = tf.placeholder(tf.float32, ())
     # below = x - epsilon
     # above = x + epsilon
-    # projected = tf.clip_by_value(tf.clip_by_value(x_hat, below, above), 0, 1)
+    # projected = tf.clip_by_value(tf.clip_by_value(x_hat, below, above), 0.0, 1.0)
 
     projected = tf.clip_by_value(x_hat, 0.0, 1.0)
     with tf.control_dependencies([projected]):
@@ -722,10 +724,10 @@ def eot2(img, target, lr, steps, num_samples, lagrange_c, eps=5.0/255.0, restore
 
         transformed_logits, _ = inception(x_hat_t, reuse=True)
 
-        norm = tf.reduce_max(tf.square(
+        norm = tf.reduce_sum(tf.square(
                 tf.subtract(
-                    rgb_to_lab_norm(x_t), 
-                    rgb_to_lab_norm(x_hat_t)
+                    x_t, 
+                    x_hat_t
                     )))
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
             logits=transformed_logits, labels=labels)

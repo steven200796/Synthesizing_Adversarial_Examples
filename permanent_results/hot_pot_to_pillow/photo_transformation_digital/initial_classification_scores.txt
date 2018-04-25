@@ -1,0 +1,11 @@
+Initial Results 
+       pillow        : 0.490
+quilt, comforter, comfort, puff : 0.167
+       buckle        : 0.026
+      necklace       : 0.018
+       purse         : 0.016
+        tray         : 0.015
+     hair slide      : 0.011
+        bib          : 0.007
+   jigsaw puzzle     : 0.006
+    mixing bowl      : 0.005

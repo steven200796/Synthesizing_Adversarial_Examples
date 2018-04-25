@@ -1,0 +1,131 @@
+Adversarial Results base
+     guacamole       : 0.995 target
+  bulletproof vest   : 0.001
+      burrito        : 0.000
+     tiger cat       : 0.000
+       mortar        : 0.000
+  tabby, tabby cat   : 0.000 correct 
+German shepherd, German shepherd dog, German police dog, alsatian : 0.000
+       apron         : 0.000
+  lynx, catamount    : 0.000
+lion, king of beasts, Panthera leo : 0.000
+
+Adversarial Results scale_transform
+     guacamole       : 0.992 target
+      burrito        : 0.001
+  bulletproof vest   : 0.000
+       mortar        : 0.000
+      syringe        : 0.000
+     tiger cat       : 0.000
+lion, king of beasts, Panthera leo : 0.000
+  lynx, catamount    : 0.000
+dingo, warrigal, warragal, Canis dingo : 0.000
+ Australian terrier  : 0.000
+
+Adversarial Results brightness_transform
+     guacamole       : 0.994 target
+  bulletproof vest   : 0.001
+      burrito        : 0.000
+     tiger cat       : 0.000
+  tabby, tabby cat   : 0.000 correct 
+       mortar        : 0.000
+  lynx, catamount    : 0.000
+German shepherd, German shepherd dog, German police dog, alsatian : 0.000
+       apron         : 0.000
+lion, king of beasts, Panthera leo : 0.000
+
+Adversarial Results gaussian_noise_transform
+     guacamole       : 0.992 target
+  bulletproof vest   : 0.001
+     tiger cat       : 0.000
+      burrito        : 0.000
+  tabby, tabby cat   : 0.000 correct 
+  lynx, catamount    : 0.000
+ Australian terrier  : 0.000
+leopard, Panthera pardus : 0.000
+lion, king of beasts, Panthera leo : 0.000
+    bell pepper      : 0.000
+
+Adversarial Results translation_transform
+     guacamole       : 0.983 target
+  bulletproof vest   : 0.002
+     tiger cat       : 0.000
+      burrito        : 0.000
+  tabby, tabby cat   : 0.000 correct 
+      syringe        : 0.000
+       mortar        : 0.000
+German shepherd, German shepherd dog, German police dog, alsatian : 0.000
+    Egyptian cat     : 0.000
+    bell pepper      : 0.000
+
+Adversarial Results rotate_transform
+     guacamole       : 0.997 target
+  bulletproof vest   : 0.001
+     tiger cat       : 0.000
+      burrito        : 0.000
+      envelope       : 0.000
+       mortar        : 0.000
+       apron         : 0.000
+  tabby, tabby cat   : 0.000 correct 
+German shepherd, German shepherd dog, German police dog, alsatian : 0.000
+ Australian terrier  : 0.000
+
+Adversarial Results Composition_0
+     guacamole       : 0.999 target
+      burrito        : 0.000
+  bulletproof vest   : 0.000
+   custard apple     : 0.000
+lion, king of beasts, Panthera leo : 0.000
+ Australian terrier  : 0.000
+  pizza, pizza pie   : 0.000
+     trilobite       : 0.000
+     tiger cat       : 0.000
+      envelope       : 0.000
+
+Adversarial Results Composition_1
+     guacamole       : 0.998 target
+  bulletproof vest   : 0.000
+      burrito        : 0.000
+      envelope       : 0.000
+   custard apple     : 0.000
+      broccoli       : 0.000
+lion, king of beasts, Panthera leo : 0.000
+     tiger cat       : 0.000
+ Australian terrier  : 0.000
+  pizza, pizza pie   : 0.000
+
+Adversarial Results Composition_2
+     guacamole       : 0.954 target
+      burrito        : 0.023
+  lynx, catamount    : 0.001
+     tiger cat       : 0.001
+  tabby, tabby cat   : 0.001 correct 
+lion, king of beasts, Panthera leo : 0.001
+  pizza, pizza pie   : 0.000
+  bulletproof vest   : 0.000
+    Persian cat      : 0.000
+home theater, home theatre : 0.000
+
+Adversarial Results Composition_3
+     guacamole       : 0.995 target
+      burrito        : 0.000
+  bulletproof vest   : 0.000
+     tiger cat       : 0.000
+      envelope       : 0.000
+lion, king of beasts, Panthera leo : 0.000
+  tabby, tabby cat   : 0.000 correct 
+      broccoli       : 0.000
+  pizza, pizza pie   : 0.000
+       apron         : 0.000
+
+Adversarial Results Composition_4
+     guacamole       : 0.996 target
+      burrito        : 0.000
+  bulletproof vest   : 0.000
+lion, king of beasts, Panthera leo : 0.000
+     tiger cat       : 0.000
+      broccoli       : 0.000
+   custard apple     : 0.000
+       apron         : 0.000
+  tabby, tabby cat   : 0.000 correct 
+      syringe        : 0.000

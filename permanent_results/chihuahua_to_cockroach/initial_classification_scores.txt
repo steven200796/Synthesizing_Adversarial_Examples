@@ -1,0 +1,11 @@
+Initial Results 
+     Chihuahua       : 0.823 correct 
+     Pomeranian      : 0.018
+Pekinese, Pekingese, Peke : 0.004
+      papillon       : 0.003
+     toy poodle      : 0.003
+ Brabancon griffon   : 0.002
+  Japanese spaniel   : 0.002
+West Highland white terrier : 0.002
+  Mexican hairless   : 0.002
+   French bulldog    : 0.002

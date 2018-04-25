@@ -1,0 +1,5 @@
+Initial results with single transformation sampling.
+
+Classifies as target class with 100% certainty on all single transformation tests.  We see it does not extend well to composition tests, as the lowering of the confidence is more from the transformations themselves than the adversarial layer.
+
+Done with basic cross entropy loss function over the expectation (sampled) of the transformed image.

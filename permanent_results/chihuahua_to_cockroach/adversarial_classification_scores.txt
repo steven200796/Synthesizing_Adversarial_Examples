@@ -1,0 +1,131 @@
+Adversarial Results base
+  cockroach, roach   : 0.923 target
+        bee          : 0.009
+ant, emmet, pismire  : 0.004
+       maraca        : 0.002
+       snail         : 0.001
+Siamese cat, Siamese : 0.001
+       wreck         : 0.001
+sulphur-crested cockatoo, Kakatoe galerita, Cacatua galerita : 0.001
+chambered nautilus, pearly nautilus, nautilus : 0.001
+ apiary, bee house   : 0.001
+
+Adversarial Results scale_transform
+  cockroach, roach   : 0.885 target
+        bee          : 0.013
+ant, emmet, pismire  : 0.011
+       snail         : 0.003
+       maraca        : 0.003
+sulphur-crested cockatoo, Kakatoe galerita, Cacatua galerita : 0.002
+ apiary, bee house   : 0.002
+       wreck         : 0.001
+hand blower, blow dryer, blow drier, hair dryer, hair drier : 0.001
+chambered nautilus, pearly nautilus, nautilus : 0.001
+
+Adversarial Results rotate_transform
+  cockroach, roach   : 0.935 target
+        bee          : 0.014
+    bucket, pail     : 0.002
+       maraca        : 0.002
+ teddy, teddy bear   : 0.001
+ apiary, bee house   : 0.001
+      balloon        : 0.001
+ant, emmet, pismire  : 0.001
+hand blower, blow dryer, blow drier, hair dryer, hair drier : 0.001
+ Christmas stocking  : 0.001
+
+Adversarial Results brightness_transform
+  cockroach, roach   : 0.937 target
+        bee          : 0.007
+ant, emmet, pismire  : 0.003
+       maraca        : 0.001
+       snail         : 0.001
+       wreck         : 0.001
+Siamese cat, Siamese : 0.001
+sulphur-crested cockatoo, Kakatoe galerita, Cacatua galerita : 0.001
+ apiary, bee house   : 0.001
+chambered nautilus, pearly nautilus, nautilus : 0.001
+
+Adversarial Results gaussian_noise_transform
+  cockroach, roach   : 0.971 target
+       isopod        : 0.001
+        bee          : 0.000
+    hermit crab      : 0.000
+ant, emmet, pismire  : 0.000
+       snail         : 0.000
+hand blower, blow dryer, blow drier, hair dryer, hair drier : 0.000
+Sealyham terrier, Sealyham : 0.000
+       wreck         : 0.000
+sulphur-crested cockatoo, Kakatoe galerita, Cacatua galerita : 0.000
+
+Adversarial Results translation_transform
+  cockroach, roach   : 0.600 target
+        bee          : 0.043
+       snail         : 0.038
+       maraca        : 0.024
+ant, emmet, pismire  : 0.006
+    hermit crab      : 0.005
+chambered nautilus, pearly nautilus, nautilus : 0.005
+   cicada, cicala    : 0.004
+        tick         : 0.004
+       wreck         : 0.004
+
+Adversarial Results Composition_0
+  cockroach, roach   : 0.978 target
+       isopod        : 0.002
+        tick         : 0.001
+      cricket        : 0.001
+    hermit crab      : 0.000
+   cicada, cicala    : 0.000
+     leafhopper      : 0.000
+        bee          : 0.000
+       snail         : 0.000
+book jacket, dust cover, dust jacket, dust wrapper : 0.000
+
+Adversarial Results Composition_1
+  cockroach, roach   : 0.861 target
+       isopod        : 0.050
+    hermit crab      : 0.003
+        tick         : 0.003
+     trilobite       : 0.003
+     jellyfish       : 0.002
+book jacket, dust cover, dust jacket, dust wrapper : 0.002
+chiton, coat-of-mail shell, sea cradle, polyplacophore : 0.002
+       snail         : 0.002
+      cricket        : 0.001
+
+Adversarial Results Composition_2
+  cockroach, roach   : 0.995 target
+        bee          : 0.000
+book jacket, dust cover, dust jacket, dust wrapper : 0.000
+       wreck         : 0.000
+       isopod        : 0.000
+        mask         : 0.000
+      envelope       : 0.000
+ teddy, teddy bear   : 0.000
+chiton, coat-of-mail shell, sea cradle, polyplacophore : 0.000
+chambered nautilus, pearly nautilus, nautilus : 0.000
+
+Adversarial Results Composition_3
+  cockroach, roach   : 0.984 target
+       isopod        : 0.001
+television, television system : 0.000
+    hermit crab      : 0.000
+axolotl, mud puppy, Ambystoma mexicanum : 0.000
+        bee          : 0.000
+       wreck         : 0.000
+       snail         : 0.000
+        tick         : 0.000
+     armadillo       : 0.000
+
+Adversarial Results Composition_4
+  cockroach, roach   : 0.910 target
+hand blower, blow dryer, blow drier, hair dryer, hair drier : 0.004
+ teddy, teddy bear   : 0.003
+television, television system : 0.002
+      envelope       : 0.001
+     toy poodle      : 0.001
+ Lhasa, Lhasa apso   : 0.001
+scale, weighing machine : 0.001
+       maraca        : 0.001
+      Shih-Tzu       : 0.001
